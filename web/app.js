@@ -364,6 +364,7 @@ function availability() {
   document
     .querySelectorAll("[data-inspect]")
     .forEach((b) => (b.disabled = !state.result));
+  inspectionNavigation();
   $("prepareFirst").hidden = hasSession;
   $("capturePrerequisite").textContent = !hasSession
     ? "First prepare and measure your printed board, then select Use this target."
@@ -525,15 +526,45 @@ $("deselectAll").onclick = () => {
   state.views.forEach((v) => (v.enabled = false));
   selectionChanged();
 };
+let sourceLoading = false,
+  sourcePending = null;
+function sourceNavigation() {
+  const index = state.views.findIndex((v) => v.id === inspectedId);
+  $("viewCounter").textContent = `${index + 1} / ${state.views.length}`;
+  $("viewPrevious").disabled = index <= 0;
+  $("viewNext").disabled = index >= state.views.length - 1;
+}
 async function inspectSource(id) {
   inspectedId = id;
-  const v = state.views.find((v) => v.id === id);
-  $("viewCaption").textContent =
-    `View ${id} · ${v.holdout ? "validation" : "training"} · ${v.points} corners`;
-  $("viewImage").removeAttribute("src");
+  sourcePending = id;
   if (!$("viewDialog").open) $("viewDialog").showModal();
-  const d = await api({ op: "view", id });
-  if (inspectedId === id) $("viewImage").src = d.image;
+  sourceNavigation();
+  if (sourceLoading) return;
+  sourceLoading = true;
+  try {
+    while (sourcePending !== null) {
+      const requested = sourcePending;
+      sourcePending = null;
+      const v = state.views.find((v) => v.id === requested),
+        requestedSession = state.session;
+      $("viewCaption").textContent = `Loading view ${requested}…`;
+      const d = await api({ op: "view", id: requested });
+      if (
+        inspectedId === requested &&
+        state.session === requestedSession &&
+        $("viewDialog").open
+      ) {
+        $("viewImage").src = d.image;
+        $("viewCaption").textContent =
+          `View ${requested} · ${v.enabled ? "kept" : "excluded"} ${v.holdout ? "validation" : "training"} · ${v.points} corners`;
+      }
+    }
+  } catch (error) {
+    $("viewCaption").textContent = error.message;
+  } finally {
+    sourceLoading = false;
+    sourceNavigation();
+  }
 }
 $("viewClose").onclick = () => $("viewDialog").close();
 function adjacentView(delta) {
@@ -543,12 +574,33 @@ function adjacentView(delta) {
       .id,
   );
 }
-$("viewPrevious").onclick = () => action(() => adjacentView(-1));
-$("viewNext").onclick = () => action(() => adjacentView(1));
+$("viewPrevious").onclick = () => adjacentView(-1);
+$("viewNext").onclick = () => adjacentView(1);
+$("viewDialog").addEventListener("close", () => {
+  sourcePending = null;
+});
 $("viewDialog").addEventListener("keydown", (event) => {
-  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+  if (
+    event.target.closest("input,select,textarea") ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
+  )
+    return;
+  const delta =
+    event.key === "ArrowLeft"
+      ? -1
+      : event.key === "ArrowRight"
+        ? 1
+        : event.key === "Home"
+          ? -state.views.length
+          : event.key === "End"
+            ? state.views.length
+            : 0;
+  if (delta) {
     event.preventDefault();
-    action(() => adjacentView(event.key === "ArrowLeft" ? -1 : 1));
+    event.stopPropagation();
+    adjacentView(delta);
   }
 });
 document.addEventListener("keydown", (event) => {
@@ -626,18 +678,34 @@ function render() {
       return `<tr data-view-id="${v.id}" tabindex="0"><td><button class="thumbnail-button" data-source-preview="${v.id}" aria-label="Enlarge view ${v.id}">${v.thumbnail ? `<img class="view-thumbnail" src="${v.thumbnail}" alt="View ${v.id}">` : "Preview"}</button></td><td><input type="checkbox" data-id="${v.id}" data-field="enabled" aria-label="Keep view ${v.id}" ${v.enabled ? "checked" : ""}></td><td><input type="checkbox" data-id="${v.id}" data-field="holdout" aria-label="Validate view ${v.id}" ${v.holdout ? "checked" : ""}></td><td>${String(v.id).padStart(3, "0")}</td><td>${v.points}</td><td>${v.sharpness.toFixed(0)}</td><td class="${m && m.rms > +$("threshold").value ? "bad" : ""}">${m ? m.rms.toFixed(3) : "—"}</td><td>${m ? m.p95.toFixed(3) : "—"}</td><td><button data-inspect="${v.id}">Inspect</button></td></tr>`;
     })
     .join("");
+  const previousPreview = $("previewView").value;
   $("previewView").replaceChildren(
     ...state.views.map(
       (v) =>
         new Option(`View ${v.id}${v.holdout ? " · validation" : ""}`, v.id),
     ),
   );
+  if (state.views.some((v) => String(v.id) === previousPreview))
+    $("previewView").value = previousPreview;
+  $("inspectionStrip").innerHTML = state.views
+    .map(
+      (v) =>
+        `<button data-inspection-id="${v.id}" aria-label="Inspect view ${v.id}">${v.thumbnail ? `<img src="${v.thumbnail}" alt="">` : ""}<span>${v.id}</span></button>`,
+    )
+    .join("");
+  document
+    .querySelectorAll("[data-inspection-id]")
+    .forEach(
+      (button) =>
+        (button.onclick = () => chooseInspection(+button.dataset.inspectionId)),
+    );
+  inspectionNavigation();
   document.querySelectorAll("[data-inspect]").forEach(
     (b) =>
       (b.onclick = () => {
         $("previewView").value = b.dataset.inspect;
         go("result");
-        $("preview").click();
+        refreshInspection();
       }),
   );
   document.querySelectorAll("#views input").forEach(
@@ -673,8 +741,7 @@ function render() {
     .querySelectorAll("[data-source-preview]")
     .forEach(
       (button) =>
-        (button.onclick = () =>
-          action(() => inspectSource(+button.dataset.sourcePreview))),
+        (button.onclick = () => inspectSource(+button.dataset.sourcePreview)),
     );
   syncRowStates();
   const r = state.result;
@@ -838,26 +905,110 @@ $("flag").onclick = () => {
     `${ids.length} high-error training views unchecked. Review the reason, then refit. Validation views retained.`,
   );
 };
-$("preview").onclick = () =>
-  action(async () => {
-    if (!state.result) throw Error("Fit current selection first.");
-    const d = await api({
-      op: "preview",
-      id: +$("previewView").value,
-      balance: +$("balance").value,
-    });
-    $("original").src = d.original;
-    $("undistorted").src = d.undistorted;
-    $("newK").replaceChildren(
-      "Rectified camera matrix:",
-      MathUI.element(
-        String.raw`\mathbf K_{\mathrm{new}}=` + MathUI.matrix(d.newK, 3),
-        true,
-      ),
-      "Exported intrinsics describe the original frames.",
-    );
-    note("Preview ready. Black borders reflect rays outside the source image.");
+let inspectionLoading = false,
+  inspectionPending = null;
+function inspectionNavigation() {
+  const id = +$("previewView").value,
+    index = state.views.findIndex((v) => v.id === id),
+    v = state.views[index],
+    metric = state.result?.views.find((v) => v.id === id);
+  $("inspectCounter").textContent = v
+    ? `View ${index + 1} of ${state.views.length} · ID ${id} · ${v.enabled ? "kept" : "excluded"} ${v.holdout ? "validation" : "training"}${metric ? " · " + metric.rms.toFixed(3) + " px RMS" : ""}`
+    : "No captured views";
+  $("inspectPrevious").disabled = !state.result || index <= 0;
+  $("inspectNext").disabled = !state.result || index >= state.views.length - 1;
+  document.querySelectorAll("[data-inspection-id]").forEach((button) => {
+    const active = +button.dataset.inspectionId === id;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.disabled = !state.result;
   });
+  if ($("viewDialog").open) sourceNavigation();
+}
+function chooseInspection(id) {
+  $("previewView").value = id;
+  inspectionNavigation();
+  const active = document.querySelector(`[data-inspection-id="${id}"]`);
+  active?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return refreshInspection();
+}
+function moveInspection(delta) {
+  const index = state.views.findIndex((v) => v.id === +$("previewView").value);
+  if (state.views.length)
+    return chooseInspection(
+      state.views[Math.max(0, Math.min(state.views.length - 1, index + delta))]
+        .id,
+    );
+}
+async function refreshInspection() {
+  if (!state.result) {
+    $("inspectionStatus").textContent =
+      "Fit the selected images first to inspect reprojection and undistortion.";
+    return;
+  }
+  inspectionPending = +$("previewView").value;
+  inspectionNavigation();
+  if (inspectionLoading) return;
+  inspectionLoading = true;
+  try {
+    while (inspectionPending !== null) {
+      const id = inspectionPending;
+      inspectionPending = null;
+      const calibration = state.result;
+      $("inspectionStatus").textContent = `Loading view ${id}…`;
+      const d = await api({ op: "preview", id, balance: +$("balance").value });
+      if (+$("previewView").value === id && state.result === calibration) {
+        $("original").src = d.original;
+        $("undistorted").src = d.undistorted;
+        $("newK").replaceChildren(
+          "Rectified camera matrix:",
+          MathUI.element(
+            String.raw`\mathbf K_{\mathrm{new}}=` + MathUI.matrix(d.newK, 3),
+            true,
+          ),
+          "Exported intrinsics describe the original frames.",
+        );
+        $("inspectionStatus").textContent =
+          `View ${id} ready. Green dots are detected corners; red circles are model predictions.`;
+      }
+    }
+  } catch (error) {
+    $("inspectionStatus").textContent = error.message;
+  } finally {
+    inspectionLoading = false;
+    inspectionNavigation();
+  }
+}
+$("preview").onclick = refreshInspection;
+$("previewView").onchange = refreshInspection;
+$("balance").onchange = refreshInspection;
+$("inspectPrevious").onclick = () => moveInspection(-1);
+$("inspectNext").onclick = () => moveInspection(1);
+document.addEventListener("keydown", (event) => {
+  if (
+    !$("result").classList.contains("active") ||
+    $("viewDialog").open ||
+    event.target.closest("input,select,textarea") ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
+  )
+    return;
+  const delta =
+    event.key === "ArrowLeft"
+      ? -1
+      : event.key === "ArrowRight"
+        ? 1
+        : event.key === "Home"
+          ? -state.views.length
+          : event.key === "End"
+            ? state.views.length
+            : 0;
+  if (delta && state.result) {
+    event.preventDefault();
+    moveInspection(delta);
+  }
+});
 $("export").onclick = () =>
   action(async () => {
     if (!state.result) throw Error("Fit current selection first.");

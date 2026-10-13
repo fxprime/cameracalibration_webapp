@@ -936,6 +936,21 @@ projection_parameters:
         </button>
       </section>
       <section id="result" class="page">
+        <div class="inspection-navigation">
+          <button id="inspectPrevious">← Previous view</button
+          ><span id="inspectCounter" role="status"></span
+          ><button id="inspectNext">Next view →</button>
+        </div>
+        <p class="muted">
+          Use ← / → to browse, Home / End to jump to the first / last view, or
+          click a thumbnail. Each view loads automatically.
+        </p>
+        <div
+          id="inspectionStrip"
+          class="inspection-strip"
+          aria-label="Choose a calibration view"
+        ></div>
+        <p id="inspectionStatus" role="status" aria-live="polite"></p>
         <div class="toolbar">
           <label>View<select id="previewView"></select></label
           ><label
@@ -1053,9 +1068,13 @@ projection_parameters:
     <dialog id="viewDialog">
       <div class="toolbar">
         <button id="viewPrevious">← Previous image</button
+        ><span id="viewCounter" role="status"></span
         ><button id="viewNext">Next image →</button
         ><button id="viewClose">Close · Esc</button>
       </div>
+      <p class="muted">
+        ← / → previous / next · Home / End first / last · Esc close
+      </p>
       <h2 id="viewCaption"></h2>
       <img id="viewImage" alt="Full saved calibration image" />
     </dialog>

@@ -637,3 +637,69 @@ dialog::backdrop {
 .capture-stage.mirrored-preview #guideOverlay {
   transform: scaleX(-1);
 }
+.inspection-navigation {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0;
+}
+.inspection-navigation span,
+#viewCounter {
+  font-size: 14px;
+  color: #47665c;
+}
+.inspection-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 3px 14px;
+  margin-bottom: 12px;
+}
+.inspection-strip button {
+  flex: 0 0 90px;
+  padding: 4px;
+  background: white;
+  border: 2px solid transparent;
+}
+.inspection-strip button.active {
+  border-color: #087f69;
+  background: #e2efe9;
+}
+.inspection-strip img {
+  width: 78px;
+  height: 52px;
+  object-fit: contain;
+}
+.inspection-strip span {
+  display: block;
+  font-size: 12px;
+}
+.inspection-navigation button {
+  white-space: nowrap;
+}
+#inspectionStatus {
+  min-height: 24px;
+  color: #185c48;
+}
+@media (max-width: 700px) {
+  .inspection-navigation {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .inspection-navigation span {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .inspection-navigation button {
+    padding: 10px;
+  }
+}
+#result .inspection-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f4f6f5;
+  padding: 12px 0;
+  border-bottom: 1px solid #dde5e1;
+}
