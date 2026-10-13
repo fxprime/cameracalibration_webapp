@@ -33,6 +33,9 @@ async function api(q) {
 async function action(fn) {
   if (busy) return;
   busy = true;
+  document
+    .querySelectorAll("#views input")
+    .forEach((input) => (input.disabled = true));
   document.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     await fn();
@@ -40,7 +43,11 @@ async function action(fn) {
     note(e.message, true);
   } finally {
     busy = false;
+    document
+      .querySelectorAll("#views input")
+      .forEach((input) => (input.disabled = false));
     document.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    availability();
   }
 }
 function go(id) {
@@ -228,6 +235,8 @@ $("newSession").onclick = () =>
     stopTracking();
     await selectionQueue;
     state = await api({ op: "new", config: config(true) });
+    lastSelectionAnchor = null;
+    setGuide(0);
     files = {};
     render();
     go("capture");
@@ -270,6 +279,7 @@ function disconnect() {
   if (stream) stream.getTracks().forEach((t) => t.stop());
   stream = null;
   $("video").srcObject = null;
+  availability();
 }
 $("disconnect").onclick = disconnect;
 $("connect").onclick = () =>
@@ -305,41 +315,248 @@ function frame() {
   c.getContext("2d").drawImage(v, 0, 0);
   return c.toDataURL("image/png");
 }
-const guidance = [
-  ["Start near the center", "Board fills about half the image. Hold still."],
-  [
-    "Cover the upper-left",
-    "Move the board toward this edge without cutting checkerboard corners.",
-  ],
-  ["Cover the upper-right", "Capture sharp corners near the image boundary."],
-  ["Cover the lower-right", "Keep enough light and avoid glare."],
-  ["Cover the lower-left", "Edge observations constrain lens distortion."],
-  ["Tilt left and right", "Rotate 20–45° about the board’s vertical axis."],
-  ["Tilt upward and downward", "Rotate about a second axis."],
-  ["Vary the distance", "Mix smaller and larger board appearances."],
-  [
-    "Repeat diverse views",
-    "Aim for 20–40 varied views, then reserve 5–10 new views for validation.",
-  ],
-];
-function guide() {
-  let i = Math.min(guidance.length - 1, Math.floor(state.views.length / 3));
-  $("guide").textContent = guidance[i][0];
-  $("guidance").textContent = guidance[i][1];
-  $("captureCount").textContent =
-    `${state.views.length} saved views · ${state.views.filter((v) => v.enabled && !v.holdout).length} training · ${state.views.filter((v) => v.enabled && v.holdout).length} validation. Session: ${state.session || "none"}`;
+let guideIndex = 0,
+  lastSelectionAnchor = null,
+  inspectedId = null;
+function adoptSession(data) {
+  state = data;
+  lastSelectionAnchor = null;
+  const c = data.config;
+  $("pattern").value = c.type;
+  $("cols").value = c.cols;
+  $("rows").value = c.rows;
+  $("element").value = c.size * 1000;
+  $("spacing").value = c.spacing;
+  $("designSpacing").value = c.spacing;
+  $("spanWidth").value = c.measurements?.horizontalMm ?? "";
+  $("spanHeight").value = c.measurements?.verticalMm ?? "";
+  $("spanCols").value = c.measurements?.horizontalTags ?? c.cols;
+  $("spanRows").value = c.measurements?.verticalTags ?? c.rows;
+  updateMeasurement();
+  if (state.result) $("model").value = state.result.model;
+  if (data.size) {
+    $("width").value = data.size[0];
+    $("height").value = data.size[1];
+  }
+  guideIndex = CaptureGuide.steps.findIndex(
+    (_, i) => placementCount(i) < (CaptureGuide.steps[i].shots || 2),
+  );
+  if (guideIndex < 0) guideIndex = CaptureGuide.steps.length - 1;
+  $("holdout").checked = !!CaptureGuide.steps[guideIndex].validation;
 }
+function availability() {
+  if (busy) return;
+  const train = state.views.filter((v) => v.enabled && !v.holdout).length;
+  const hasSession = !!state.session;
+  $("captureFrame").disabled = !stream || !hasSession;
+  $("disconnect").disabled = !stream;
+  $("fit").disabled = train < 10;
+  $("fitReadiness").textContent =
+    train < 10
+      ? `Keep at least 10 training images before fitting (${train} currently kept). Capture more or adjust selection.`
+      : `${train} training images ready. First review the thumbnails, then choose Fit selected views.`;
+  ["preview", "export", "flag"].forEach(
+    (id) => ($(id).disabled = !state.result),
+  );
+  ["selectAll", "deselectAll"].forEach(
+    (id) => ($(id).disabled = !state.views.length),
+  );
+  document
+    .querySelectorAll("[data-inspect]")
+    .forEach((b) => (b.disabled = !state.result));
+  $("prepareFirst").hidden = hasSession;
+  $("capturePrerequisite").textContent = !hasSession
+    ? "First prepare and measure your printed board, then select Use this target."
+    : !stream
+      ? "Your session is ready. Connect the camera, then follow the dashed outline."
+      : "Camera connected. Match the outline, hold still, then press Space or Capture.";
+}
+function guideGeometry() {
+  const aspect =
+    $("video").videoWidth / $("video").videoHeight ||
+    +$("width").value / +$("height").value;
+  const boardAspect =
+    $("pattern").value === "checkerboard"
+      ? (+$("cols").value + 1) / (+$("rows").value + 1)
+      : (+$("cols").value +
+          (+$("cols").value - 1) *
+            +($("spacing").value || $("designSpacing").value)) /
+        (+$("rows").value +
+          (+$("rows").value - 1) *
+            +($("spacing").value || $("designSpacing").value));
+  return {
+    aspect,
+    boardAspect: Number.isFinite(boardAspect) ? boardAspect : 1,
+  };
+}
+function placementCount(index) {
+  const step = CaptureGuide.steps[index],
+    g = guideGeometry();
+  return state.views.filter(
+    (v) =>
+      v.guide_step === step.id &&
+      !!v.holdout === !!step.validation &&
+      CaptureGuide.match(v.outline, step, g.aspect, g.boardAspect).ok,
+  ).length;
+}
+function guide() {
+  const step = CaptureGuide.steps[guideIndex],
+    g = guideGeometry();
+  $("captureStage").style.aspectRatio = g.aspect;
+  $("guide").textContent = step.title;
+  $("guidance").textContent = step.text;
+  if (step.validation && placementCount(guideIndex) >= (step.shots || 6)) {
+    $("guide").textContent = "Capture plan complete";
+    $("guidance").textContent =
+      "Review the thumbnails next. Keep sharp, diverse images, fit the training set, and inspect validation errors before accepting the result.";
+  }
+  $("guideProgress").textContent =
+    `PLACEMENT ${guideIndex + 1} OF ${CaptureGuide.steps.length} · ${placementCount(guideIndex)}/${step.shots || 2} MATCHING VIEWS`;
+  const points = CaptureGuide.points(step, g.aspect, g.boardAspect);
+  $("guidePolygon").setAttribute(
+    "points",
+    points.map((p) => p.map((v) => v * 100).join(",")).join(" "),
+  );
+  $("guideCenter").setAttribute("cx", step.cx * 100);
+  $("guideCenter").setAttribute("cy", step.cy * 100);
+  $("guideOverlay").hidden = !$("showGuide").checked;
+  $("captureCount").textContent =
+    `${state.views.length} saved views · ${state.views.filter((v) => v.enabled && !v.holdout).length} training · ${state.views.filter((v) => v.enabled && v.holdout).length} validation. Aim for at least 20 diverse training views and 5–10 fresh validation views.`;
+}
+function setGuide(index) {
+  guideIndex = Math.max(0, Math.min(CaptureGuide.steps.length - 1, index));
+  $("holdout").checked = !!CaptureGuide.steps[guideIndex].validation;
+  $("observedPolygon").setAttribute("points", "");
+  $("guideFeedback").textContent =
+    "Match the dashed outline, hold still, then capture. The check uses approximate 2D shape.";
+  guide();
+}
+$("guidePrevious").onclick = () => setGuide(guideIndex - 1);
+$("guideNext").onclick = () => setGuide(guideIndex + 1);
+$("showGuide").onchange = guide;
+$("video").addEventListener("loadedmetadata", guide);
+function selectionChanged() {
+  state.result = null;
+  files = {};
+  $("intrinsics").hidden = true;
+  $("fitOutcomes").hidden = false;
+  $("exportText").textContent = "";
+  $("stats").innerHTML =
+    '<div class="card">Selection changed. Fit again before using or exporting calibration results. Table errors, if present, are from the previous fit.</div>';
+  $("warnings").replaceChildren();
+  drawCoverage();
+  guide();
+  syncRowStates();
+  queueSelection();
+}
+function syncRowStates() {
+  document.querySelectorAll("#views tr[data-view-id]").forEach((row) => {
+    const v = state.views.find((v) => v.id === +row.dataset.viewId);
+    row.classList.toggle("kept", v.enabled);
+    row.classList.toggle("excluded", !v.enabled);
+    row.setAttribute("aria-selected", String(v.enabled));
+    row.querySelector('[data-field="enabled"]').checked = v.enabled;
+    row.querySelector('[data-field="holdout"]').checked = v.holdout;
+    row.setAttribute(
+      "aria-label",
+      `View ${v.id}, ${v.enabled ? "kept" : "excluded"}, ${v.holdout ? "validation" : "training"}`,
+    );
+  });
+  availability();
+  $("selectionCount").textContent =
+    `${state.views.filter((v) => v.enabled).length} of ${state.views.length} kept`;
+}
+function toggleRow(id, range = false) {
+  if (busy) return;
+  const target = state.views.findIndex((v) => v.id === id),
+    enabled = !state.views[target].enabled;
+  let anchor =
+    range && lastSelectionAnchor !== null
+      ? state.views.findIndex((v) => v.id === lastSelectionAnchor)
+      : target;
+  if (anchor < 0) anchor = target;
+  for (let i = Math.min(anchor, target); i <= Math.max(anchor, target); i++)
+    state.views[i].enabled = enabled;
+  lastSelectionAnchor = id;
+  selectionChanged();
+}
+$("selectAll").onclick = () => {
+  state.views.forEach((v) => (v.enabled = true));
+  selectionChanged();
+};
+$("deselectAll").onclick = () => {
+  state.views.forEach((v) => (v.enabled = false));
+  selectionChanged();
+};
+async function inspectSource(id) {
+  inspectedId = id;
+  const v = state.views.find((v) => v.id === id);
+  $("viewCaption").textContent =
+    `View ${id} · ${v.holdout ? "validation" : "training"} · ${v.points} corners`;
+  $("viewImage").removeAttribute("src");
+  if (!$("viewDialog").open) $("viewDialog").showModal();
+  const d = await api({ op: "view", id });
+  if (inspectedId === id) $("viewImage").src = d.image;
+}
+$("viewClose").onclick = () => $("viewDialog").close();
+function adjacentView(delta) {
+  const index = state.views.findIndex((v) => v.id === inspectedId);
+  return inspectSource(
+    state.views[Math.max(0, Math.min(state.views.length - 1, index + delta))]
+      .id,
+  );
+}
+$("viewPrevious").onclick = () => action(() => adjacentView(-1));
+$("viewNext").onclick = () => action(() => adjacentView(1));
+$("viewDialog").addEventListener("keydown", (event) => {
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    event.preventDefault();
+    action(() => adjacentView(event.key === "ArrowLeft" ? -1 : 1));
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (
+    event.code === "Space" &&
+    $("capture").classList.contains("active") &&
+    !event.target.closest("input,select,textarea,button") &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    event.preventDefault();
+    $("captureFrame").click();
+  }
+});
 async function capture(data, source = "browser stream") {
   const d = await api({
     op: "capture",
     frame: data,
     source,
     holdout: $("holdout").checked,
+    guideStep: CaptureGuide.steps[guideIndex].id,
   });
   state = d;
   $("detection").src = d.overlay;
-  $("detection").hidden = false;
+  $("detection").hidden = true;
+  const saved = d.views.at(-1),
+    g = guideGeometry(),
+    match = CaptureGuide.match(
+      saved.outline,
+      CaptureGuide.steps[guideIndex],
+      g.aspect,
+      g.boardAspect,
+    );
   render();
+  $("observedPolygon").setAttribute(
+    "points",
+    (saved.outline || []).map((p) => p.map((v) => v * 100).join(",")).join(" "),
+  );
+  $("guideFeedback").textContent = "Saved. " + match.hint;
+  if (
+    match.ok &&
+    placementCount(guideIndex) >= (CaptureGuide.steps[guideIndex].shots || 2) &&
+    guideIndex < CaptureGuide.steps.length - 1
+  )
+    setGuide(guideIndex + 1);
   note(
     `View ${d.views.at(-1).id} saved with ${d.views.at(-1).points} detected corners. Move to a different pose.`,
   );
@@ -369,7 +586,7 @@ function render() {
   $("views").innerHTML = state.views
     .map((v) => {
       const m = metrics.get(v.id);
-      return `<tr><td><input type="checkbox" data-id="${v.id}" data-field="enabled" aria-label="Keep view ${v.id}" ${v.enabled ? "checked" : ""}></td><td><input type="checkbox" data-id="${v.id}" data-field="holdout" aria-label="Validate view ${v.id}" ${v.holdout ? "checked" : ""}></td><td>${String(v.id).padStart(3, "0")}</td><td>${v.points}</td><td>${v.sharpness.toFixed(0)}</td><td class="${m && m.rms > +$("threshold").value ? "bad" : ""}">${m ? m.rms.toFixed(3) : "—"}</td><td>${m ? m.p95.toFixed(3) : "—"}</td><td><button data-inspect="${v.id}">Inspect</button></td></tr>`;
+      return `<tr data-view-id="${v.id}" tabindex="0"><td><button class="thumbnail-button" data-source-preview="${v.id}" aria-label="Enlarge view ${v.id}">${v.thumbnail ? `<img class="view-thumbnail" src="${v.thumbnail}" alt="View ${v.id}">` : "Preview"}</button></td><td><input type="checkbox" data-id="${v.id}" data-field="enabled" aria-label="Keep view ${v.id}" ${v.enabled ? "checked" : ""}></td><td><input type="checkbox" data-id="${v.id}" data-field="holdout" aria-label="Validate view ${v.id}" ${v.holdout ? "checked" : ""}></td><td>${String(v.id).padStart(3, "0")}</td><td>${v.points}</td><td>${v.sharpness.toFixed(0)}</td><td class="${m && m.rms > +$("threshold").value ? "bad" : ""}">${m ? m.rms.toFixed(3) : "—"}</td><td>${m ? m.p95.toFixed(3) : "—"}</td><td><button data-inspect="${v.id}">Inspect</button></td></tr>`;
     })
     .join("");
   $("previewView").replaceChildren(
@@ -387,20 +604,44 @@ function render() {
       }),
   );
   document.querySelectorAll("#views input").forEach(
-    (i) =>
-      (i.onchange = () => {
-        state.views.find((v) => v.id === +i.dataset.id)[i.dataset.field] =
-          i.checked;
-        $("stats").innerHTML =
-          "<p>Selection changed. Refit before trusting or exporting the previous result.</p>";
-        state.result = null;
-        files = {};
-        $("exportText").textContent = "";
-        $("intrinsics").hidden = true;
-        queueSelection();
+    (input) =>
+      (input.onchange = () => {
+        state.views.find((v) => v.id === +input.dataset.id)[
+          input.dataset.field
+        ] = input.checked;
+        lastSelectionAnchor = +input.dataset.id;
+        selectionChanged();
       }),
   );
+  document.querySelectorAll("#views tr[data-view-id]").forEach((row) => {
+    row.onclick = (event) => {
+      if (!event.target.closest("button,input,a"))
+        toggleRow(+row.dataset.viewId, event.shiftKey);
+    };
+    row.onkeydown = (event) => {
+      if (event.target !== row) return;
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        toggleRow(+row.dataset.viewId, event.shiftKey);
+      } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        (event.key === "ArrowUp"
+          ? row.previousElementSibling
+          : row.nextElementSibling
+        )?.focus();
+      }
+    };
+  });
+  document
+    .querySelectorAll("[data-source-preview]")
+    .forEach(
+      (button) =>
+        (button.onclick = () =>
+          action(() => inspectSource(+button.dataset.sourcePreview))),
+    );
+  syncRowStates();
   const r = state.result;
+  $("fitOutcomes").hidden = !r;
   $("intrinsics").hidden = !r;
   if (r) {
     $("intrinsics").replaceChildren();
@@ -620,19 +861,7 @@ $("load").onclick = () =>
   action(async () => {
     await selectionQueue;
     state = await api({ op: "load", session: $("sessions").value });
-    const c = state.config;
-    $("pattern").value = c.type;
-    $("cols").value = c.cols;
-    $("rows").value = c.rows;
-    $("element").value = c.size * 1000;
-    $("spacing").value = c.spacing;
-    $("designSpacing").value = c.spacing;
-    $("spanWidth").value = c.measurements?.horizontalMm ?? "";
-    $("spanHeight").value = c.measurements?.verticalMm ?? "";
-    $("spanCols").value = c.measurements?.horizontalTags ?? c.cols;
-    $("spanRows").value = c.measurements?.verticalTags ?? c.rows;
-    updateMeasurement();
-    if (state.result) $("model").value = state.result.model;
+    adoptSession(state);
     files = {};
     targetHelp();
     render();
@@ -787,7 +1016,18 @@ window.addEventListener("beforeunload", disconnect);
 devices().catch((e) =>
   note("Camera enumeration unavailable: " + e.message, true),
 );
-action(generate);
+action(async () => {
+  await generate();
+  const saved = await api({ op: "state" });
+  if (saved.session) {
+    adoptSession(saved);
+    render();
+    if (saved.views.length) go("review");
+    note(
+      `Restored ${saved.views.length} saved views. Review thumbnails or continue guided capture.`,
+    );
+  }
+});
 render();
 
 function drawDistortion() {

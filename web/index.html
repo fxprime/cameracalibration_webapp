@@ -725,18 +725,48 @@ projection_parameters:
         </div>
       </section>
       <section id="capture" class="page">
+        <div class="step-note">
+          <b>1 · Connect</b> Choose your camera and connect.
+          <b>2 · Capture</b> Follow one outline at a time.
+          <b>3 · Validate</b> Save fresh views, then review.
+        </div>
+        <p id="capturePrerequisite" role="status"></p>
+        <button id="prepareFirst" data-go="target">
+          Prepare the target first →
+        </button>
         <div class="toolbar">
           <select id="camera" aria-label="Camera"></select
           ><button id="connect">Connect camera</button
-          ><button id="disconnect">Stop camera</button
-          ><label>Width <input id="width" type="number" value="1920" /></label
-          ><label>Height <input id="height" type="number" value="1200" /></label
-          ><label>FPS <input id="fps" type="number" value="30" /></label>
+          ><button id="disconnect">Stop camera</button>
+          <details class="camera-settings">
+            <summary>Stream settings</summary>
+            <div class="toolbar">
+              <label
+                >Width <input id="width" type="number" value="1920" /></label
+              ><label
+                >Height <input id="height" type="number" value="1200" /></label
+              ><label>FPS <input id="fps" type="number" value="30" /></label>
+            </div>
+          </details>
         </div>
         <div class="split">
           <div class="card live">
-            <video id="video" autoplay playsinline muted></video
-            ><canvas id="frameCanvas" hidden></canvas
+            <div id="captureStage" class="capture-stage">
+              <video id="video" autoplay playsinline muted></video
+              ><svg
+                id="guideOverlay"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-label="Suggested target position and perspective"
+              >
+                <polygon id="guidePolygon" points="" />
+                <polygon id="observedPolygon" points="" />
+                <circle id="guideCenter" r="1.2" /></svg
+              ><span class="overlay-label"
+                >Dashed outline: desired placement</span
+              >
+            </div>
+            <canvas id="frameCanvas" hidden></canvas
             ><img
               id="detection"
               alt="Captured target with detected corners"
@@ -748,22 +778,44 @@ projection_parameters:
             </p>
           </div>
           <div class="card">
-            <small>CAPTURE WITH INTENT</small>
+            <small id="guideProgress">PLACEMENT 1 OF 14</small>
             <h2 id="guide">Start near the center</h2>
             <p id="guidance">
               Hold the board still and make its corners sharp. Then capture.
             </p>
+            <div class="guide-navigation">
+              <button id="guidePrevious">← Previous placement</button
+              ><button id="guideNext">Next placement →</button>
+            </div>
+            <p id="guideFeedback" role="status">
+              Match the dashed outline, hold still, then capture. It is a 2D
+              placement suggestion, not a measured 3D pose.
+            </p>
+            <label
+              ><input id="showGuide" type="checkbox" checked /> Show placement
+              overlay</label
+            >
             <label
               ><input id="holdout" type="checkbox" /> Save as validation
               only</label
-            ><button class="primary" id="captureFrame">Capture this view</button
-            ><label
-              >Or import images<input
-                id="upload"
-                type="file"
-                multiple
-                accept="image/png,image/jpeg,image/tiff,image/webp"
-            /></label>
+            ><button class="primary" id="captureFrame">
+              Capture sharp view · Space
+            </button>
+            <p class="muted">
+              After a successful detection, the solid outline shows your saved
+              board. Two matching training views advance the guide; every
+              detected view is retained even if it does not match.
+            </p>
+            <details>
+              <summary>Import existing images instead</summary>
+              <label
+                >Or import images<input
+                  id="upload"
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/tiff,image/webp"
+              /></label>
+            </details>
             <p>
               Captures are manual. No control refresh or automatic exposure
               changes. Source dimensions are preserved. Browser frames are saved
@@ -776,31 +828,23 @@ projection_parameters:
         <div id="captureCount" class="card">No captures yet.</div>
       </section>
       <section id="review" class="page">
-        <div class="toolbar">
-          <label
-            >Lens model<select id="model">
-              <option value="radtan">Pinhole + radtan (4 coefficients)</option>
-              <option value="fisheye">
-                Fisheye · equidistant / Kannala–Brandt
-              </option>
-            </select></label
-          ><label
-            >Review threshold (px RMS)<input
-              id="threshold"
-              type="number"
-              min="0.05"
-              max="10"
-              step="0.05"
-              value="0.5" /></label
-          ><button class="primary" id="fit">Fit selected views</button
-          ><button id="flag">Suggest high-error exclusions</button
-          ><button data-go="capture">Capture more</button>
+        <div class="step-note">
+          <b>1 · Check images</b> Click a row to keep or exclude it; click a
+          thumbnail to enlarge it. <b>2 · Fit</b> Fit the kept training views.
+          <b>3 · Refine</b> Inspect errors, change selection and refit.
         </div>
-        <div id="stats" class="cards"></div>
-        <div id="warnings"></div>
-        <div id="intrinsics" class="card" hidden></div>
         <div class="card">
-          <h2>Every view is inspectable</h2>
+          <h2>1 · Choose the images to use</h2>
+          <div class="selection-toolbar">
+            <button id="selectAll">Select all</button
+            ><button id="deselectAll">Deselect all</button
+            ><span id="selectionCount" role="status"></span>
+          </div>
+          <p>
+            Click anywhere on a row to toggle Keep. Shift-click selects a range.
+            Keyboard: Up/Down moves between rows; Space or Enter toggles Keep.
+            Validation is separate and stays unchanged by bulk selection.
+          </p>
           <p>
             Kept views contribute to fitting or validation, according to their
             checkbox. Validation views never enter the intrinsic fit. Uncheck a
@@ -808,9 +852,14 @@ projection_parameters:
             lower the score.
           </p>
           <div class="tablewrap">
-            <table>
+            <table
+              id="reviewTable"
+              role="grid"
+              aria-label="Calibration view selection"
+            >
               <thead>
                 <tr>
+                  <th>Preview</th>
                   <th>Keep</th>
                   <th>Validation</th>
                   <th>View</th>
@@ -828,6 +877,43 @@ projection_parameters:
             >*Laplacian variance is an unnormalized hint, not a universal
             sharpness threshold.</small
           >
+        </div>
+        <div class="card" id="fitPanel">
+          <h2>2 · Fit the kept training images</h2>
+          <p>
+            Choose the lens model, then fit. The validation images stay outside
+            the fit. After fitting, inspect errors in the rows above and refit
+            whenever you change Keep or Validation.
+          </p>
+          <div class="toolbar">
+            <label
+              >Lens model<select id="model">
+                <option value="radtan">
+                  Pinhole + radtan (4 coefficients)
+                </option>
+                <option value="fisheye">
+                  Fisheye · equidistant / Kannala–Brandt
+                </option>
+              </select></label
+            ><label
+              >Review threshold (px RMS)<input
+                id="threshold"
+                type="number"
+                min="0.05"
+                max="10"
+                step="0.05"
+                value="0.5" /></label
+            ><button class="primary" id="fit">Fit selected views</button
+            ><button id="flag">Suggest high-error exclusions</button
+            ><button data-go="capture">Capture more</button>
+          </div>
+          <p id="fitReadiness" role="status"></p>
+        </div>
+        <div id="fitOutcomes" hidden>
+          <h2>3 · Inspect the fit and refine</h2>
+          <div id="stats" class="cards"></div>
+          <div id="warnings"></div>
+          <div id="intrinsics" class="card" hidden></div>
         </div>
         <div class="card">
           <h2>View centers</h2>
@@ -957,9 +1043,19 @@ projection_parameters:
         <span id="sessionName">No session</span>
       </footer>
     </main>
+    <dialog id="viewDialog">
+      <div class="toolbar">
+        <button id="viewPrevious">← Previous image</button
+        ><button id="viewNext">Next image →</button
+        ><button id="viewClose">Close · Esc</button>
+      </div>
+      <h2 id="viewCaption"></h2>
+      <img id="viewImage" alt="Full saved calibration image" />
+    </dialog>
     <script src="vendor/katex/katex.min.js"></script>
     <script src="math.js"></script>
     <script src="board-measurement.js"></script>
+    <script src="capture-guide.js"></script>
     <script src="app.js"></script>
     <script src="radial-fov.js"></script>
   </body>

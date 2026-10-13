@@ -49,6 +49,16 @@ class WorkerTests(unittest.TestCase):
             dict(op="capture", frame=self.encode(original), holdout=True)
         )
         name = response["session"]
+        self.assertTrue(
+            response["views"][0]["thumbnail"].startswith("data:image/png;base64,")
+        )
+        self.assertEqual(len(response["views"][0]["outline"]), 4)
+        view = worker.handle(dict(op="view", id=0))
+        decoded = cv2.imdecode(
+            np.frombuffer(base64.b64decode(view["image"].split(",")[1]), np.uint8),
+            cv2.IMREAD_COLOR,
+        )
+        np.testing.assert_array_equal(decoded, original)
         np.testing.assert_array_equal(
             cv2.imread(str(worker.ROOT / name / "0000.png")), original
         )

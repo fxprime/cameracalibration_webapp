@@ -7,6 +7,7 @@ import sys, json, base64, time, uuid, pathlib, cv2, numpy as np
 from targets import detect, svg, DICT, validate
 from calibration import calibrate, project, pose
 from exports import exports, target_config
+from observations import thumbnail, board_outline
 import yaml
 
 ROOT = pathlib.Path("data")
@@ -47,6 +48,15 @@ def persist():
 
 
 def summary():
+    for view in views:
+        if "outline" not in view and size:
+            view["outline"] = board_outline(
+                np.float64(view["object"]), np.float64(view["image"]), config, size
+            )
+        if "thumbnail" not in view:
+            frame = cv2.imread(str(ROOT / session / f"{view['id']:04d}.png"))
+            if frame is not None:
+                view["thumbnail"] = thumbnail(frame)
     return dict(
         session=session,
         views=[
@@ -59,6 +69,8 @@ def summary():
 def handle(q):
     global views, result, config, size, session
     op = q["op"]
+    if op == "state":
+        return dict(**summary(), config=config, size=size)
     if op == "health":
         return dict(
             app="Camera Calibration Lab",
@@ -128,6 +140,9 @@ def handle(q):
             enabled=True,
             holdout=bool(q.get("holdout")),
             points=len(p),
+            thumbnail=thumbnail(frame),
+            outline=board_outline(obj, p, config, size),
+            guide_step=q.get("guideStep"),
             tags=ids,
             sharpness=float(
                 cv2.Laplacian(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
@@ -161,6 +176,14 @@ def handle(q):
         for n, data in files.items():
             (ROOT / session / n).write_text(data)
         return dict(files=files)
+    if op == "view":
+        i = int(q["id"])
+        if not any(v["id"] == i for v in views):
+            raise ValueError("Unknown view")
+        frame = cv2.imread(str(ROOT / session / f"{i:04d}.png"))
+        if frame is None:
+            raise ValueError("Saved image is unavailable")
+        return dict(image=png(frame))
     if op == "preview":
         if not result:
             raise ValueError("Calibrate first")
@@ -274,6 +297,8 @@ if __name__ == "__main__":
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)  # Rust owns graceful shutdown.
+    if os.environ.get("CALIB_RESUME_SESSION"):
+        handle(dict(op="load", session=os.environ["CALIB_RESUME_SESSION"]))
     for line in sys.stdin:
         try:
             answer = handle(json.loads(line))

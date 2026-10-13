@@ -461,3 +461,174 @@ details pre {
   background: transparent;
   margin: 4px 0;
 }
+.step-note {
+  background: #e2efe9;
+  padding: 18px;
+  border-radius: 9px;
+  line-height: 1.8;
+  margin-bottom: 22px;
+  font-size: 15px;
+}
+.step-note b {
+  color: #185c48;
+  margin-right: 5px;
+}
+.capture-stage {
+  position: relative;
+  background: #102d3b;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 1.6;
+}
+.live .capture-stage video {
+  display: block;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  border-radius: 0;
+}
+.capture-stage svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#guidePolygon {
+  fill: rgba(65, 222, 177, 0.07);
+  stroke: #66e7c1;
+  stroke-width: 0.6;
+  stroke-dasharray: 2 1.2;
+  vector-effect: non-scaling-stroke;
+  stroke-width: 3px;
+}
+#observedPolygon {
+  fill: none;
+  stroke: #ffc865;
+  vector-effect: non-scaling-stroke;
+  stroke-width: 2px;
+}
+#guideCenter {
+  fill: #66e7c1;
+}
+.overlay-label {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  background: #102d3be6;
+  color: white;
+  font-size: 12px;
+  padding: 7px;
+  border-radius: 5px;
+}
+.guide-navigation,
+.selection-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 16px 0;
+}
+.selection-toolbar span {
+  font-size: 14px;
+  color: #526974;
+}
+.thumbnail-button {
+  padding: 0;
+  background: #eff4f1;
+  border: 0;
+  display: block;
+  width: 108px;
+  height: 72px;
+}
+.view-thumbnail {
+  width: 108px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+#views tr {
+  cursor: pointer;
+}
+#views tr.kept {
+  background: #f0f8f3;
+}
+#views tr.excluded {
+  background: #faf3ee;
+}
+#views tr.excluded td:not(:first-child) {
+  color: #846f63;
+}
+#views tr:hover {
+  background: #dfefe7;
+}
+#views tr:focus-visible {
+  outline: 3px solid #087f69;
+  outline-offset: -3px;
+}
+#views td {
+  vertical-align: middle;
+}
+dialog {
+  width: min(1000px, 94vw);
+  max-height: 94vh;
+  border: 1px solid #cbdad5;
+  border-radius: 12px;
+  padding: 22px;
+}
+dialog::backdrop {
+  background: #102d3baa;
+}
+#viewImage {
+  max-height: 68vh;
+  object-fit: contain;
+  background: #102d3b;
+}
+#guideFeedback {
+  background: #eef5f1;
+  padding: 12px;
+  border-radius: 7px;
+}
+.camera-settings {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.camera-settings summary {
+  padding: 10px;
+  font-size: 13px;
+}
+.camera-settings .toolbar {
+  margin-top: 10px;
+}
+#prepareFirst {
+  margin-bottom: 16px;
+}
+#capturePrerequisite,
+#fitReadiness {
+  font-size: 15px;
+  color: #185c48;
+}
+#review .tablewrap {
+  max-height: 480px;
+  overflow: auto;
+}
+#review thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+#reviewTable {
+  min-width: 680px;
+}
+#fitPanel .toolbar {
+  margin-bottom: 12px;
+}
+#fitPanel p {
+  margin-bottom: 12px;
+}
+#fitOutcomes[hidden] {
+  display: none;
+}
