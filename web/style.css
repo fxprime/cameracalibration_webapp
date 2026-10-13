@@ -632,3 +632,8 @@ dialog::backdrop {
 #fitOutcomes[hidden] {
   display: none;
 }
+/* Display transform only: frame() still samples the original video pixels. */
+.capture-stage.mirrored-preview video,
+.capture-stage.mirrored-preview #guideOverlay {
+  transform: scaleX(-1);
+}

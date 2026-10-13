@@ -371,6 +371,42 @@ function availability() {
       ? "Your session is ready. Connect the camera, then follow the dashed outline."
       : "Camera connected. Match the outline, hold still, then press Space or Capture.";
 }
+function previewInstruction(text) {
+  if (!$("mirrorPreview").checked) return text;
+  const swaps = {
+    left: "right",
+    right: "left",
+    clockwise: "counterclockwise",
+    counterclockwise: "clockwise",
+  };
+  return text.replace(
+    /\b(left|right|counterclockwise|clockwise)\b/gi,
+    (word) => {
+      const value = swaps[word.toLowerCase()];
+      return word[0] === word[0].toUpperCase()
+        ? value[0].toUpperCase() + value.slice(1)
+        : value;
+    },
+  );
+}
+function applyPreviewMirror() {
+  $("captureStage").classList.toggle(
+    "mirrored-preview",
+    $("mirrorPreview").checked,
+  );
+  try {
+    localStorage.setItem(
+      "calibration-mirror-preview",
+      String($("mirrorPreview").checked),
+    );
+  } catch {}
+  guide();
+}
+try {
+  const saved = localStorage.getItem("calibration-mirror-preview");
+  if (saved !== null) $("mirrorPreview").checked = saved === "true";
+} catch {}
+$("mirrorPreview").onchange = applyPreviewMirror;
 function guideGeometry() {
   const aspect =
     $("video").videoWidth / $("video").videoHeight ||
@@ -403,8 +439,8 @@ function guide() {
   const step = CaptureGuide.steps[guideIndex],
     g = guideGeometry();
   $("captureStage").style.aspectRatio = g.aspect;
-  $("guide").textContent = step.title;
-  $("guidance").textContent = step.text;
+  $("guide").textContent = previewInstruction(step.title);
+  $("guidance").textContent = previewInstruction(step.text);
   if (step.validation && placementCount(guideIndex) >= (step.shots || 6)) {
     $("guide").textContent = "Capture plan complete";
     $("guidance").textContent =
@@ -435,6 +471,7 @@ $("guidePrevious").onclick = () => setGuide(guideIndex - 1);
 $("guideNext").onclick = () => setGuide(guideIndex + 1);
 $("showGuide").onchange = guide;
 $("video").addEventListener("loadedmetadata", guide);
+applyPreviewMirror();
 function selectionChanged() {
   state.result = null;
   files = {};
