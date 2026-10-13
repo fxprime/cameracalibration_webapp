@@ -1031,7 +1031,12 @@ projection_parameters:
         </div>
         <div class="two">
           <div class="card">
-            <img id="trackImage" alt="AprilTag pose axes" />
+            <div class="tracking-stage">
+              <video id="trackVideo" autoplay muted playsinline></video>
+              <canvas id="trackOverlay" aria-label="AprilTag pose axes"></canvas>
+            </div>
+            <p id="trackingRate">Live preview · waiting for tracking</p>
+            <p>Tracking uses full-resolution grayscale frames for speed. Saved calibration pictures remain full-resolution, lossless PNG.</p>
             <p>
               Axes: red <span data-math="X"></span>, green
               <span data-math="Y"></span>, blue <span data-math="Z"></span> in

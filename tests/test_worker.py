@@ -101,6 +101,14 @@ class WorkerTests(unittest.TestCase):
         )
         q = dict(op="track", frame=self.encode(image), tagSize=s, scale=1, id=0)
         a = worker.handle(q)["poses"][0]
+        compact = worker.handle(dict(q, compact=True, encoding="gray8", width=1280, height=800,
+                                     frame=base64.b64encode(image.tobytes()).decode()))
+        self.assertNotIn("overlay", compact)
+        self.assertGreaterEqual(compact["processing_ms"], 0)
+        self.assertEqual(len(compact["poses"][0]["axis_pixels"]), 4)
+        np.testing.assert_allclose(compact["poses"][0]["translation"], a["translation"], atol=1e-9)
+        with self.assertRaisesRegex(ValueError, "frame length"):
+            worker.handle(dict(q, compact=True, encoding="gray8", width=1280, height=800, frame="AA=="))
         q["scale"] = 2
         b = worker.handle(q)["poses"][0]
         self.assertLess(abs(a["translation"][2] - 0.8), 0.02)

@@ -1,9 +1,12 @@
 //! Local-only web server. Vision requests are serialized through a replaceable worker.
 use axum::{
+    body::Bytes,
     extract::{DefaultBodyLimit, State},
+    http::HeaderMap,
     routing::{get, post},
     Json, Router,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader, Write},
@@ -57,11 +60,37 @@ async fn api(State(worker): State<Arc<Mutex<Worker>>>, Json(v): Json<Value>) -> 
         Err(e) => json!({"error":e.to_string()}),
     })
 }
+// Browser sends one full-resolution grayscale byte per pixel: no PNG codec or JSON image.
+async fn track(
+    State(worker): State<Arc<Mutex<Worker>>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Json<Value> {
+    let metadata = headers
+        .get("x-track-settings")
+        .and_then(|h| h.to_str().ok());
+    let mut q: Value = match metadata.and_then(|m| serde_json::from_str(m).ok()) {
+        Some(Value::Object(m)) => Value::Object(m),
+        _ => return Json(json!({"error":"Invalid tracking settings"})),
+    };
+    let width = q["width"].as_u64().unwrap_or(0);
+    let height = q["height"].as_u64().unwrap_or(0);
+    let pixels = width.saturating_mul(height);
+    if pixels == 0 || pixels > 12_000_000 || pixels != body.len() as u64 {
+        return Json(json!({"error":"Invalid grayscale frame dimensions"}));
+    }
+    q["op"] = json!("track");
+    q["encoding"] = json!("gray8");
+    q["compact"] = json!(true);
+    q["frame"] = json!(STANDARD.encode(body));
+    api(State(worker), Json(q)).await
+}
 #[tokio::main]
 async fn main() {
     let worker = Arc::new(Mutex::new(Worker::start()));
     let app = Router::new()
         .route("/api", post(api))
+        .route("/track", post(track))
         .route(
             "/health",
             get(|| async { Json(json!({"app":"Camera Calibration Lab"})) }),

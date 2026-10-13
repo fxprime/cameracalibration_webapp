@@ -1075,7 +1075,48 @@ function stopTracking() {
   tracking = false;
   $("tracking").textContent = "Start tracking";
 }
-let trackGeneration = 0;
+let trackGeneration = 0, lastPoseText = 0, lastTrackCompletion = 0;
+// Tracking-only transport. The calibration frame() path remains lossless color PNG.
+async function trackingFrame() {
+  const video = $("video");
+  if (!stream || !video.videoWidth) throw Error("Connect a camera first.");
+  const canvas = $("frameCanvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(video, 0, 0);
+  const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const gray = new Uint8Array(canvas.width * canvas.height);
+  for (let i = 0, j = 0; j < gray.length; i += 4, j++)
+    gray[j] = (77 * rgba[i] + 150 * rgba[i + 1] + 29 * rgba[i + 2] + 128) >> 8;
+  const response = await fetch("/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "X-Track-Settings": JSON.stringify({
+      width: canvas.width, height: canvas.height,
+      tagSize: +$("tagSize").value / 1000, scale: +$("scale").value, id: +$("tagId").value,
+    }) },
+    body: gray,
+  });
+  if (!response.ok) throw Error(`Server returned ${response.status}`);
+  const data = await response.json();
+  if (data.error) throw Error(data.error);
+  return data;
+}
+function trackingOverlay(pose) {
+  const video = $("video"), canvas = $("trackOverlay");
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  }
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  if (!pose) return;
+  context.lineWidth = 3;
+  for (const [i, color] of [[1, "#f33"], [2, "#0d3"], [3, "#38f"]]) {
+    const points = pose.axis_pixels;
+    context.strokeStyle = color; context.beginPath();
+    context.moveTo(...points[0]); context.lineTo(...points[i]); context.stroke();
+  }
+}
 $("tracking").onclick = () => {
   if (tracking) {
     stopTracking();
@@ -1088,6 +1129,8 @@ $("tracking").onclick = () => {
   }
   tracking = true;
   const generation = ++trackGeneration;
+  $("trackVideo").srcObject = stream;
+  lastPoseText = lastTrackCompletion = 0;
   $("tracking").textContent = "Stop tracking";
   note(
     "Tracking tag pose. Frame processing is sequential; the preview is not a synchronized VIO stream.",
@@ -1097,59 +1140,60 @@ $("tracking").onclick = () => {
 async function trackLoop(generation) {
   if (!tracking || generation !== trackGeneration) return;
   try {
-    const d = await api({
-      op: "track",
-      frame: frame(),
-      tagSize: +$("tagSize").value / 1000,
-      scale: +$("scale").value,
-      id: +$("tagId").value,
-    });
+    const started = performance.now();
+    const d = await trackingFrame();
     if (!tracking || generation !== trackGeneration) return;
-    $("trackImage").src = d.overlay;
+    const now = performance.now();
+    const interval = lastTrackCompletion ? now - lastTrackCompletion : now - started;
+    lastTrackCompletion = now;
+    $("trackingRate").textContent = `Pose updates: ${(1000 / interval).toFixed(1)} / second · response ${(now - started).toFixed(0)} ms · vision ${d.processing_ms.toFixed(0)} ms`;
     const p = d.poses[0];
+    trackingOverlay(p);
+    drawPose(p || null);
     if (p) {
       poseLog.push({ timestamp: d.timestamp, session: state.session, ...p });
       if (poseLog.length > 10000) poseLog.shift();
-      const heading = document.createElement("h3");
-      heading.textContent = `Tag ${p.id}`;
-      const translation = MathUI.element(
-        String.raw`\mathbf t_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
-          MathUI.matrix(
-            p.translation.map((v) => [v]),
-            4,
-          ) +
-          String.raw`\,\mathrm m`,
-        true,
-      );
-      const rotation = MathUI.element(
-        String.raw`\mathbf R_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
-          MathUI.matrix(p.rotation, 4),
-        true,
-      );
-      const error = MathUI.element(
-        String.raw`\operatorname{RMS}=${p.rms.toFixed(3)}\,\mathrm{px}`,
-      );
-      const warning = document.createElement("p");
-      warning.textContent = p.ambiguous
-        ? "⚠ Planar pose is ambiguous."
-        : "Pose selected by positive depth and pixel error.";
-      $("poseText").replaceChildren(
-        heading,
-        translation,
-        rotation,
-        error,
-        warning,
-      );
-      drawPose(p);
+      if (now - lastPoseText >= 200) {
+      lastPoseText = now;
+        const heading = document.createElement("h3");
+        heading.textContent = `Tag ${p.id}`;
+        const translation = MathUI.element(
+          String.raw`\mathbf t_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+            MathUI.matrix(
+              p.translation.map((v) => [v]),
+              4,
+            ) +
+            String.raw`\,\mathrm m`,
+          true,
+        );
+        const rotation = MathUI.element(
+          String.raw`\mathbf R_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+            MathUI.matrix(p.rotation, 4),
+          true,
+        );
+        const error = MathUI.element(
+          String.raw`\operatorname{RMS}=${p.rms.toFixed(3)}\,\mathrm{px}`,
+        );
+        const warning = document.createElement("p");
+        warning.textContent = p.ambiguous
+          ? "⚠ Planar pose is ambiguous."
+          : "Pose selected by positive depth and pixel error.";
+        $("poseText").replaceChildren(
+          heading,
+          translation,
+          rotation,
+          error,
+          warning,
+        );
+      }
     } else {
       $("poseText").textContent = "Selected tag not visible. No current pose.";
-      drawPose(null);
     }
   } catch (e) {
     note(e.message, true);
     stopTracking();
   }
-  if (tracking) setTimeout(() => trackLoop(generation), 100);
+  if (tracking) setTimeout(() => trackLoop(generation), 0);
 }
 function drawPose(p) {
   const c = $("poseCanvas"),

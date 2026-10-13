@@ -19,6 +19,10 @@ config = None
 size = None
 session = None
 
+_tracking_params = cv2.aruco.DetectorParameters()
+_tracking_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+TRACKING_DETECTOR = cv2.aruco.ArucoDetector(DICT, _tracking_params)
+
 
 def decode(s):
     raw = base64.b64decode(s.split(",")[-1])
@@ -216,7 +220,17 @@ def handle(q):
     if op == "track":
         if not result:
             raise ValueError("Calibrate first")
-        frame = decode(q["frame"])
+        started = time.perf_counter()
+        if q.get("encoding") == "gray8":
+            width, height = int(q["width"]), int(q["height"])
+            if width <= 0 or height <= 0 or width * height > 12000000:
+                raise ValueError("Invalid grayscale frame dimensions")
+            raw = base64.b64decode(q["frame"], validate=True)
+            if len(raw) != width * height:
+                raise ValueError("Invalid grayscale frame length")
+            frame = np.frombuffer(raw, np.uint8).reshape(height, width)
+        else:
+            frame = decode(q["frame"])
         if list(frame.shape[1::-1]) != result["size"]:
             raise ValueError("Tracking resolution must match calibration")
         s = float(q["tagSize"])
@@ -225,9 +239,7 @@ def handle(q):
             raise ValueError("Invalid size or scale")
         K = np.array(result["K"])
         D = np.array(result["D"])
-        params = cv2.aruco.DetectorParameters()
-        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
-        cs, ids, _ = cv2.aruco.ArucoDetector(DICT, params).detectMarkers(frame)
+        cs, ids, _ = TRACKING_DETECTOR.detectMarkers(frame)
         poses = []
         obj = np.float64(
             [
@@ -287,9 +299,15 @@ def handle(q):
             )
             axis = np.float64([[0, 0, 0], [s / 2, 0, 0], [0, s / 2, 0], [0, 0, s / 2]])
             pix = project(axis, r, t, K, D, result["model"]).astype(int)
-            for j, color in [(1, (0, 0, 255)), (2, (0, 255, 0)), (3, (255, 0, 0))]:
-                cv2.line(frame, tuple(pix[0]), tuple(pix[j]), color, 3)
-        return dict(poses=poses, overlay=png(frame), timestamp=time.time())
+            poses[-1]["axis_pixels"] = pix.tolist()
+            poses[-1]["corners"] = p.reshape(4, 2).tolist()
+            if not q.get("compact"):
+                for j, color in [(1, (0, 0, 255)), (2, (0, 255, 0)), (3, (255, 0, 0))]:
+                    cv2.line(frame, tuple(pix[0]), tuple(pix[j]), color, 3)
+        response = dict(poses=poses, timestamp=time.time(), processing_ms=(time.perf_counter()-started)*1000)
+        if not q.get("compact"):
+            response["overlay"] = png(frame)
+        return response
     raise ValueError("Unknown operation")
 
 
