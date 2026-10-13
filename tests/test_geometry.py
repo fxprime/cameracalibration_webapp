@@ -110,7 +110,7 @@ class GeometryTests(unittest.TestCase):
             [80 + obj[:, 0] * 4000, 80 + (0.108 - obj[:, 1]) * 4000]
         )
         self.assertLess(np.max(np.abs(expected - p)), 2)
-        self.assertIn('width="168.0mm"', svg(c))
+        self.assertIn('width="210mm"', svg(c))
 
     def test_checkerboard_detection(self):
         c = dict(type="checkerboard", cols=9, rows=6, size=0.025, spacing=0.3)

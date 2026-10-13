@@ -77,8 +77,15 @@ def svg(c, single=False):
         if c["type"] == "aprilgrid" or single
         else (rows + 1) * s
     ) + 2 * border
+    # Center the black pattern on A4; page whitespace supplies the quiet border.
+    pattern_width, pattern_height = w - 2 * border, h - 2 * border
+    if pattern_width > 200 + 1e-9 or pattern_height > 287 + 1e-9:
+        raise ValueError(
+            f"Target black pattern is {pattern_width:.1f} × {pattern_height:.1f} mm; it does not fit A4 portrait with 5 mm margins. Reduce tag/square size or grid dimensions. It will not be scaled down."
+        )
+    dx, dy = (210 - w) / 2, (297 - h) / 2
     parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}"><rect width="{w}" height="{h}" fill="white"/>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297"><title>A4 calibration target — print at 100% actual size</title><rect width="210" height="297" fill="white"/><g transform="translate({dx} {dy})">'
     ]
     if c["type"] == "checkerboard" and not single:
         for y in range(rows + 1):
@@ -101,5 +108,5 @@ def svg(c, single=False):
                             parts.append(
                                 f'<rect x="{border + col * (s + gap) + x * step}" y="{border + (rows - 1 - row) * (s + gap) + y * step}" width="{step}" height="{step}"/>'
                             )
-    parts.append("</svg>")
+    parts.append("</g></svg>")
     return "".join(parts)

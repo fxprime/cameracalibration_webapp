@@ -694,19 +694,20 @@ projection_parameters:
             </div>
             <p id="targetHelp"></p>
             <button id="generate">Update target preview</button
-            ><button id="downloadTarget">Download true-size SVG</button
-            ><button id="print">Print target</button
+            ><button id="downloadTarget">Download centered A4 SVG</button
+            ><button id="print">Print A4 target</button
             ><button id="targetConfig">Download target YAML</button
             ><button class="primary" id="newSession">Use this target →</button>
           </div>
           <div class="card">
             <div id="targetPreview"></div>
             <p>
-              <b>Print at 100% / actual size.</b> Disable fit-to-page. A board
-              larger than your paper requires larger paper; never silently
-              shrink it. Measure the printed black tag edge or square size with
-              a ruler and enter the measured size. Glue to a flat, rigid
-              backing.
+              <b>A4 portrait · centered · print at 100% / actual size.</b>
+              Disable fit-to-page. The black pattern keeps its configured
+              physical dimensions; targets that exceed the A4 printable area are
+              rejected instead of scaled. Measure the printed black tag edge or
+              square size with a ruler and enter the measured size. Glue to a
+              flat, rigid backing.
             </p>
             <p>
               AprilGrid: coded IDs tolerate partial visibility and remove
@@ -1025,7 +1026,7 @@ projection_parameters:
               value="1"
               min="0.001"
               step="0.1" /></label
-          ><button id="singleTag">Download this tag</button
+          ><button id="singleTag">Download centered A4 tag</button
           ><button class="primary" id="tracking">Start tracking</button>
         </div>
         <div class="two">

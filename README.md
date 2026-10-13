@@ -20,7 +20,7 @@ Python 3.12, Rust/Cargo and a Chromium-compatible browser or Safari are required
 
 1. Read the interactive lesson or click **Skip tutorial**.
 2. Configure a checkerboard (internal corners, square size) or AprilGrid (tag36h11, rows, columns, black-edge size, gap ratio).
-3. Download the metric SVG or print. Use **100% actual size**, suitable paper and a flat rigid backing. Measure the result and update the element size. The default grid is 237.5 mm square, larger than A4’s short edge: use larger paper or smaller tags. Printing software can still rescale; the ruler is the authority.
+3. Download the metric SVG or print. Use **100% actual size**, suitable paper and a flat rigid backing. Measure the result and update the element size. Downloads are A4 portrait (210 × 297 mm), with the black pattern centered at the requested size. The pattern must fit within 5 mm page margins; oversized patterns are rejected, never silently resized. Printing software can still rescale; the ruler is the authority.
 4. Create a session. Capture 20–40 sharp views with different positions, distances and tilts about two axes. Manual capture avoids control-refresh interruptions. Importing existing images also works. Resolution changes are rejected within a session.
 5. Capture 5–10 additional diverse views with **validation only** checked. These never fit the intrinsic parameters.
 6. Fit a model, inspect each view, uncheck suspicious views and **refit**. High-error suggestions only alter checkboxes; they do not silently delete data. Add more edge views if coverage is weak. Do not remove difficult valid views just to improve the score.
@@ -91,3 +91,5 @@ Saved sessions load their thumbnails and outlines from their original frames/cor
 The live capture preview has a persistent **Mirror live preview** toggle (enabled by default). It mirrors the video and placement overlay together and adapts left/right/rotation instructions. Frame capture still reads the original video pixels; source PNGs, detections, intrinsics and tag pose coordinates are never mirrored.
 
 Inspection navigation: the calibration result page offers Previous/Next, a view counter, a thumbnail strip and automatic loading when the view or border balance changes. Arrow keys browse; Home/End jump to the endpoints. The original-image dialog has the same shortcuts and Esc to close. Read-only navigation stays responsive while loading; rapid input coalesces to the most recently requested image, and stale responses cannot overwrite the current view.
+
+Single-tag and grid downloads are now centered A4 SVG pages. SVG uses millimetres and vector cells, so the configured tag edge remains exact in the file. Browser printing requests A4 portrait; select **100% / actual size** and disable fit-to-page in the print dialog. Always remeasure the physical print, since printer software can still rescale it.

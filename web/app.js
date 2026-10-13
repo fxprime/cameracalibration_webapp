@@ -212,7 +212,7 @@ $("generate").onclick = () => action(generate);
 $("downloadTarget").onclick = () =>
   action(async () => {
     await generate();
-    download("calibration-target.svg", targetSvg, "image/svg+xml");
+    download("calibration-target-A4.svg", targetSvg, "image/svg+xml");
   });
 $("print").onclick = () => {
   const popup = window.open("", "_blank");
@@ -223,7 +223,7 @@ $("print").onclick = () => {
   action(async () => {
     await generate();
     popup.document.write(
-      `<title>Calibration target · actual size</title><style>@page{margin:0}body{margin:0}svg{display:block;max-width:none}</style>${targetSvg}`,
+      `<title>Calibration target · actual size</title><style>@page{size:A4 portrait;margin:0}body{margin:0;width:210mm;height:297mm}svg{display:block;max-width:none}</style>${targetSvg}`,
     );
     popup.document.close();
     popup.focus();
@@ -1066,7 +1066,7 @@ $("singleTag").onclick = () =>
       size: +$("tagSize").value / 1000,
     };
     download(
-      `tag36h11-${c.id}.svg`,
+      `tag36h11-${c.id}-A4.svg`,
       (await api({ op: "target", config: c, single: true })).svg,
       "image/svg+xml",
     );
