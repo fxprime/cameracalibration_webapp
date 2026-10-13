@@ -103,6 +103,18 @@ class WorkerTests(unittest.TestCase):
             np.testing.assert_allclose(response["poses"][0]["translation"],t.ravel(),atol=.015)
             np.testing.assert_allclose(response["poses"][0]["corners"],corners,atol=3)
 
+    def test_live_checkerboard_diagnostics_through_worker_api(self):
+        worker.config=dict(type="checkerboard",cols=9,rows=6,size=.025,spacing=.3)
+        worker.result=dict(K=[[800,0,305],[0,800,215],[0,0,1]],D=[0,0,0,0],model="radtan",size=[610,430])
+        response=worker.handle(dict(op="track",target="board",frame=self.encode(self.board()),scale=1))
+        board=response["poses"][0]
+        self.assertEqual(board["corner_count"],54)
+        self.assertEqual(board["tag_count"],0)
+        self.assertLess(board["rms"],.1)
+        self.assertLess(abs(board["translation"][2]-.4),.005)
+        import json
+        json.dumps(response,allow_nan=False)
+
     def test_preview_geometry_matches_opencv_and_keeps_calibration(self):
         K = np.float64([[300, 0, 160], [0, 305, 120], [0, 0, 1]])
         for model in ("radtan", "fisheye"):

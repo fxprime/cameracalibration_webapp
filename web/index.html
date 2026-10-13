@@ -1004,7 +1004,9 @@ projection_parameters:
         </button>
       </section>
       <section id="track" class="page">
+        <p>1. Choose a single tag or the calibration target from the loaded session. 2. Hold the target flat and steady. 3. Enable Undistort preview to inspect straight grid lines and corner alignment.</p>
         <div class="toolbar">
+          <label>Track<select id="trackTarget"><option value="single">Single AprilTag</option><option value="board">Loaded calibration target</option></select></label>
           <label
             >Tag ID<input
               id="tagId"
@@ -1041,6 +1043,7 @@ projection_parameters:
               <label><input id="trackUndistort" type="checkbox" /> Undistort preview</label>
               <label><input id="trackKeepBorder" type="checkbox" checked /> Keep borders</label>
               <label><input id="trackMirror" type="checkbox" /> Mirror preview</label>
+              <label><input id="boardOverlayLabels" type="checkbox" /> Tag error labels</label>
             </div>
             <p>1. Enable undistortion to straighten lens distortion. 2. Keep borders to show the wider view with black edges, or turn it off to crop them. 3. Mirror for easier positioning. These options change only the preview.</p>
             <div class="tracking-stage" id="trackingStage">
@@ -1048,6 +1051,9 @@ projection_parameters:
               <canvas id="trackUndistorted" hidden></canvas>
               <canvas id="trackOverlay" aria-label="AprilTag pose axes"></canvas>
             </div>
+            <p id="boardTrackingReport" aria-live="polite"></p>
+            <details id="boardTagErrors" hidden><summary>Per-tag pixel error</summary><div id="boardTagErrorList"></div></details>
+            <p>Board overlay: green dots are detected corners; magenta rings are reprojected corners; connecting marks show the error. Cyan lines show the predicted board grid; dashed green lines connect detected corners. In an undistorted preview, check whether the measured lines follow the straight model grid. This checks the loaded calibration without changing it.</p>
             <p id="trackingRate">Live preview · waiting for tracking</p>
             <p>Tracking uses reduced grayscale frames for speed. If a small tag disappears, choose Native or move closer. Pixel error is measured in the original calibrated image. Saved calibration pictures remain full-resolution, lossless PNG.</p>
             <p>
@@ -1057,7 +1063,7 @@ projection_parameters:
             </p>
           </div>
           <div class="card">
-            <h2>Tag position in camera coordinates</h2>
+            <h2>Target position in camera coordinates</h2>
             <canvas id="poseCanvas" width="600" height="300"></canvas>
             <div id="poseText" class="math-results">
               Calibrate, connect camera, then start tracking.
@@ -1066,8 +1072,8 @@ projection_parameters:
               <span data-math="X"></span> right ·
               <span data-math="Y"></span> down ·
               <span data-math="Z"></span> forward, in metres multiplied by the
-              scale parameter. Translation is the tag center. Rotation maps tag
-              coordinates into camera coordinates. Known tag size supplies
+              scale parameter. Translation is the single-tag center or the calibration-board origin. Rotation maps target
+              coordinates into camera coordinates. Known target dimensions supply
               metric scale; this is not arbitrary-scene depth or VIO.
             </p>
             <p>

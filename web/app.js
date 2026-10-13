@@ -1126,6 +1126,11 @@ for (const id of ["trackUndistort","trackKeepBorder","trackMirror"]) {
   };
 }
 $("trackKeepBorder").disabled = !$("trackUndistort").checked;
+$("trackTarget").onchange = () => {
+  const board = $("trackTarget").value === "board";
+  $("tagId").disabled = $("tagSize").disabled = board;
+  $("boardTrackingReport").textContent = board ? "Uses the measured target geometry saved with the loaded calibration session." : "";
+};
 const savedTrackingResolution = localStorage.getItem("tracking-resolution");
 if (["0", "640", "960"].includes(savedTrackingResolution)) $("trackResolution").value = savedTrackingResolution;
 $("trackResolution").onchange = () => localStorage.setItem("tracking-resolution", $("trackResolution").value);
@@ -1156,6 +1161,7 @@ async function trackingFrame() {
     headers: { "Content-Type": "application/octet-stream", "X-Track-Settings": JSON.stringify({
       width: canvas.width, height: canvas.height,
       source_size: [video.videoWidth, video.videoHeight], max_rms: maxRms,
+      target: $("trackTarget").value,
       tagSize: +$("tagSize").value / 1000, scale: +$("scale").value, id: +$("tagId").value,
     }) },
     body: gray,
@@ -1173,6 +1179,33 @@ function trackingOverlay(pose) {
   const context = canvas.getContext("2d");
   context.clearRect(0, 0, canvas.width, canvas.height);
   if (!pose) return;
+  if (pose.id === "board") {
+    context.strokeStyle = "#00cfe8"; context.lineWidth = 2;
+    for (const line of pose.grid_lines) {
+      context.beginPath(); line.forEach((point,i)=>i ? context.lineTo(...point) : context.moveTo(...point)); context.stroke();
+    }
+    context.strokeStyle = "#30f080"; context.setLineDash([10,8]);
+    for (const line of pose.observed_lines) {
+      context.beginPath();line.forEach((point,i)=>i ? context.lineTo(...point) : context.moveTo(...point));context.stroke();
+    }
+    context.setLineDash([]);
+    pose.observed.forEach((point,i)=>{
+      const predicted = pose.projected[i];
+      context.strokeStyle = pose.inliers[i] ? "#ffc24b" : "#ff4d30";
+      context.beginPath(); context.moveTo(...point); context.lineTo(...predicted); context.stroke();
+      context.fillStyle="#30f080";context.beginPath();context.arc(...point,3,0,2*Math.PI);context.fill();
+      context.strokeStyle="#f05bff";context.beginPath();context.arc(...predicted,5,0,2*Math.PI);context.stroke();
+    });
+  }
+  if (pose.id === "board" && $("boardOverlayLabels").checked) {
+    context.font = `${Math.max(16,Math.round(canvas.width/60))}px sans-serif`;
+    pose.per_tag.forEach((tag,i)=>{
+      const point = pose.observed[i*4];
+      context.fillStyle = "#fff";context.strokeStyle = "#182b33";context.lineWidth = 4;
+      const text = `${tag.id}: ${tag.rms.toFixed(2)} px`;
+      context.strokeText(text,point[0],point[1]-10);context.fillText(text,point[0],point[1]-10);
+    });
+  }
   context.lineWidth = 3;
   for (const [i, color] of [[1, "#f33"], [2, "#0d3"], [3, "#38f"]]) {
     const points = pose.axis_pixels;
@@ -1213,6 +1246,12 @@ async function trackLoop(generation) {
     $("trackingRate").textContent = `Pose updates: ${(1000 / interval).toFixed(1)} / second · response ${(now - started).toFixed(0)} ms · vision ${d.processing_ms.toFixed(0)} ms · ${d.input_size.join(" × ")} pixels`;
     const p = d.poses[0];
     trackingOverlay(p);
+    $("boardTrackingReport").textContent = p?.id === "board"
+      ? `${p.tag_count ? p.tag_count + " tags · " : ""}${p.corner_count} corners · ${p.inlier_count} inliers · RMS ${p.rms.toFixed(3)} px · inlier RMS ${p.inlier_rms.toFixed(3)} px · P95 ${p.p95.toFixed(3)} px · max ${p.max_error.toFixed(3)} px`
+      : $("trackTarget").value === "board" ? "Target not found: show at least three grid tags, or the whole checkerboard. No current board pose." : "";
+    $("boardTagErrors").hidden = !p?.per_tag?.length;
+    if (p?.per_tag?.length && now-lastPoseText >= 200)
+      $("boardTagErrorList").textContent = [...p.per_tag].sort((a,b)=>a.id-b.id).map(tag=>`Tag ${tag.id}: ${tag.rms.toFixed(3)} px`).join(" · ");
     drawPose(p || null);
     if (p) {
       poseLog.push({ timestamp: d.timestamp, session: state.session, ...p });
@@ -1220,9 +1259,9 @@ async function trackLoop(generation) {
       if (now - lastPoseText >= 200) {
       lastPoseText = now;
         const heading = document.createElement("h3");
-        heading.textContent = `Tag ${p.id}`;
+        heading.textContent = p.id === "board" ? "Calibration target" : `Tag ${p.id}`;
         const translation = MathUI.element(
-          String.raw`\mathbf t_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+          String.raw`\mathbf t_{\mathrm{cam}\leftarrow\mathrm{${p.id === "board" ? "board" : "tag"}}}=` +
             MathUI.matrix(
               p.translation.map((v) => [v]),
               4,
@@ -1231,7 +1270,7 @@ async function trackLoop(generation) {
           true,
         );
         const rotation = MathUI.element(
-          String.raw`\mathbf R_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+          String.raw`\mathbf R_{\mathrm{cam}\leftarrow\mathrm{${p.id === "board" ? "board" : "tag"}}}=` +
             MathUI.matrix(p.rotation, 4),
           true,
         );
@@ -1239,7 +1278,9 @@ async function trackLoop(generation) {
           String.raw`\operatorname{RMS}=${p.rms.toFixed(3)}\,\mathrm{px}`,
         );
         const warning = document.createElement("p");
-        warning.textContent = p.ambiguous
+        warning.textContent = p.id === "board"
+          ? `${p.ambiguous ? "⚠ Planar board pose is ambiguous. " : ""}${p.origin}. Error includes all detected corners, including rejected ones; pose uses a robust fit. This is a live pose-fit check, not an independent calibration score.`
+          : p.ambiguous
           ? "⚠ Planar pose is ambiguous."
           : p.small_tag ? "Small tag: depth may be noisy. Move closer or choose Native detail."
           : "Pose selected by positive depth and pixel error.";
@@ -1252,7 +1293,9 @@ async function trackLoop(generation) {
         );
       }
     } else {
-      $("poseText").textContent = d.rejected.length
+      $("poseText").textContent = $("trackTarget").value === "board"
+        ? "Calibration target not found or insufficient reliable corners. Show more of the board and hold steady."
+        : d.rejected.length
         ? "Tag found, but its pose failed the pixel-error check. Hold steady or improve lighting."
         : "Selected tag not detected. Move closer or choose Native detail. No current pose.";
     }
@@ -1298,7 +1341,7 @@ function drawPose(p) {
     x.stroke();
     x.fillStyle = "#168971";
     x.fillRect(px - 8, py - 8, 16, 16);
-    x.fillText(`Tag ${p.id} · top view`, px + 12, py);
+    x.fillText(`${p.id === "board" ? "Board origin" : "Tag " + p.id} · top view`, px + 12, py);
   }
 }
 drawPose(null);

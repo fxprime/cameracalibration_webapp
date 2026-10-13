@@ -9,6 +9,7 @@ from calibration import calibrate, project, pose
 from exports import exports, target_config
 from observations import thumbnail, board_outline
 from tracking import selected_corners
+from board_tracking import track_board
 import yaml
 
 ROOT = pathlib.Path("data")
@@ -251,15 +252,24 @@ def handle(q):
             raise ValueError("Invalid tracking resize; preserve the full camera view")
         pixel_scale = np.float64([native_width/width, native_height/height])
         max_rms = float(q.get("max_rms", 3.0))
-        tag_id = int(q.get("id", 0))
+        board_mode = q.get("target", "single") == "board"
+        tag_id = 0 if board_mode else int(q.get("id", 0))
         if not np.isfinite(max_rms) or not .1 <= max_rms <= 20 or not 0 <= tag_id < DICT.bytesList.shape[0]:
             raise ValueError("Invalid tracking quality settings")
-        s = float(q["tagSize"])
+        s = float(config["size"]) if board_mode and config else float(q["tagSize"])
         scale = float(q.get("scale", 1))
         if not 0.001 <= s <= 2 or not 0 < scale <= 1000:
             raise ValueError("Invalid size or scale")
         K = np.array(result["K"])
         D = np.array(result["D"])
+        if q.get("target", "single") == "board":
+            if not config:
+                raise ValueError("Load the calibrated target configuration first")
+            board = track_board(frame, config, result, pixel_scale, max_rms, scale)
+            return dict(poses=[board] if board else [], timestamp=time.time(), processing_ms=(time.perf_counter()-started)*1000,
+                        input_size=input_size, rejected=[], target="board")
+        if q.get("target", "single") != "single":
+            raise ValueError("Unknown tracking target")
         detection_started = time.perf_counter()
         cs, detection_size, fallback = selected_corners(frame, tag_id, q.get("detector_width", 960))
         detection_ms = (time.perf_counter()-detection_started)*1000
