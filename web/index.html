@@ -577,19 +577,121 @@ projection_parameters:
               >Black tag edge / square size (mm)<input
                 id="element"
                 type="number"
-                value="25"
+                value="22.3"
                 min="2"
                 max="500"
-                step="0.1" /></label
-            ><label
-              >Gap / black tag edge ratio<input
-                id="spacing"
-                type="number"
-                value="0.3"
-                min="0.1"
-                max="1"
-                step="0.05"
+                step="0.1"
             /></label>
+            <div id="boardMeasurements">
+              <h2>Measure several tags together</h2>
+              <p>
+                Measure from the outer black edge of the first tag to the outer
+                black edge of the last tag. Include the gaps between them;
+                exclude the white border around the board. Use at least one
+                direction; both are better.
+              </p>
+              <svg
+                viewBox="0 0 360 105"
+                aria-label="Measure the entire span across tags, including interior gaps but excluding the outside white margin"
+              >
+                <g fill="#102d3b">
+                  <rect x="30" y="10" width="70" height="45" />
+                  <rect x="140" y="10" width="70" height="45" />
+                  <rect x="250" y="10" width="70" height="45" />
+                </g>
+                <path
+                  d="M30 62V90 M320 62V90 M30 80H320 M30 80l8 -5 M30 80l8 5 M320 80l-8 -5 M320 80l-8 5"
+                  stroke="#087f69"
+                  fill="none"
+                  stroke-width="2"
+                />
+                <text x="90" y="103" fill="#47665c" font-size="12">
+                  Span across 3 tags: black edge → black edge
+                </text>
+              </svg>
+              <div class="two">
+                <label
+                  >Horizontal span (mm)<input
+                    id="spanWidth"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="Measured black edge to black edge" /></label
+                ><label
+                  >Tags across that span<input
+                    id="spanCols"
+                    type="number"
+                    value="6"
+                    min="2"
+                    max="20"
+                /></label>
+              </div>
+              <div class="two">
+                <label
+                  >Vertical span (mm, optional)<input
+                    id="spanHeight"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="Measured black edge to black edge" /></label
+                ><label
+                  >Tags down that span<input
+                    id="spanRows"
+                    type="number"
+                    value="6"
+                    min="2"
+                    max="20"
+                /></label>
+              </div>
+              <label
+                >Calculated gap / tag ratio<input
+                  id="spacing"
+                  type="number"
+                  placeholder="Enter a measured span above"
+                  readonly
+                  aria-describedby="measurementResult"
+              /></label>
+              <div
+                id="measurementResult"
+                role="status"
+                aria-live="polite"
+              ></div>
+              <details>
+                <summary>How the spacing is calculated</summary>
+                <div
+                  class="equation"
+                  data-math-display="true"
+                  data-math="g=\frac{L-ns}{n-1},\qquad q=\frac{g}{s}"
+                ></div>
+                <p>
+                  <span data-math="L"></span> is the measured span,
+                  <span data-math="n"></span> counts included tags, and
+                  <span data-math="s"></span> is the black tag edge. The gap is
+                  <span data-math="g"></span> and the ratio is
+                  <span data-math="q"></span>. With both directions measured,
+                  all measured gaps are pooled.
+                </p>
+              </details>
+              <details>
+                <summary>Layout for a new print</summary>
+                <p>
+                  This sets the gap for generating a new target. After printing,
+                  enter actual measurements above; they take precedence.
+                </p>
+                <label
+                  >Design gap / tag ratio<input
+                    id="designSpacing"
+                    type="number"
+                    min="0.1"
+                    max="1"
+                    step="0.05"
+                    value="0.3" /></label
+                ><label
+                  ><input id="useDesign" type="checkbox" /> Use the design ratio
+                  for calibration without a span measurement</label
+                >
+              </details>
+            </div>
             <p id="targetHelp"></p>
             <button id="generate">Update target preview</button
             ><button id="downloadTarget">Download true-size SVG</button
@@ -857,6 +959,7 @@ projection_parameters:
     </main>
     <script src="vendor/katex/katex.min.js"></script>
     <script src="math.js"></script>
+    <script src="board-measurement.js"></script>
     <script src="app.js"></script>
     <script src="radial-fov.js"></script>
   </body>

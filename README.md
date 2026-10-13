@@ -75,3 +75,7 @@ The lesson explains the `EquidistantCamera` / `KANNALA_BRANDT` naming and the VI
 - [ORB-SLAM3 models](https://github.com/UZ-SLAMLab/ORB_SLAM3)
 
 The lesson also includes linked real EuRoC and TUM VI configurations from OpenVINS and the Open3D reconstruction contract. These are examples for reading formats, not values to apply to another camera.
+
+## Measuring printed AprilGrid spacing
+
+Enter the measured black tag edge (for example 22.3 mm). Measure the total black-edge-to-black-edge span across several tags, including the interior gaps but excluding outer white borders, then enter the number of tags in that span. Horizontal and vertical spans are supported independently; both give a useful print-scaling check. The app computes `gap=(span-count*tagSize)/(count-1)` and the gap/tag ratio. When both directions are measured it pools their gaps, warns above 0.5% pitch disagreement and rejects a new calibration above 1% disagreement because the target assumes square tags and uniform scaling. Measurements are preserved in the saved session configuration. The original design ratio remains available for printing new boards; using it for calibration without a measured span requires selecting the explicit checkbox.

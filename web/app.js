@@ -66,25 +66,120 @@ document
   .forEach((b) => (b.onclick = () => go(b.dataset.go)));
 $("skip").onclick = () => go("target");
 go("learn");
-function config() {
+function config(requireMeasurement = false) {
+  const measurement = updateMeasurement();
+  if (
+    $("pattern").value === "aprilgrid" &&
+    requireMeasurement &&
+    !measurement &&
+    !$("useDesign").checked
+  )
+    throw Error(
+      "Enter a measured horizontal or vertical span before calibration.",
+    );
+  if (measurement?.mismatch > 0.01)
+    throw Error(
+      "Horizontal and vertical pitches disagree by more than 1%. Check the print and measure both tag sides; this model assumes a square, uniformly scaled board.",
+    );
   return {
     type: $("pattern").value,
     cols: +$("cols").value,
     rows: +$("rows").value,
     size: +$("element").value / 1000,
-    spacing: +$("spacing").value,
+    spacing: measurement ? measurement.ratio : +$("designSpacing").value,
     id: +$("tagId").value,
+    measurements: measurement
+      ? {
+          tagMm: +$("element").value,
+          horizontalMm: $("spanWidth").value ? +$("spanWidth").value : null,
+          verticalMm: $("spanHeight").value ? +$("spanHeight").value : null,
+          horizontalTags: +$("spanCols").value,
+          verticalTags: +$("spanRows").value,
+          gapMm: measurement.gapMm,
+          pitchMismatch: measurement.mismatch,
+        }
+      : null,
   };
 }
 function targetHelp() {
   $("targetHelp").textContent =
     $("pattern").value === "checkerboard"
       ? "Rows / columns count INTERNAL CORNERS, not squares."
-      : "Rows / columns count tags. Spacing is a dimensionless gap-to-tag ratio.";
-  $("spacing").disabled = $("pattern").value === "checkerboard";
+      : "Rows / columns count tags. Enter millimetre measurements above; the software calculates spacing.";
+  $("boardMeasurements").hidden = $("pattern").value === "checkerboard";
 }
 $("pattern").onchange = targetHelp;
 targetHelp();
+function updateMeasurement() {
+  const box = $("measurementResult");
+  if ($("pattern").value === "checkerboard") return null;
+  try {
+    const measured = BoardMeasurement.estimate(+$("element").value, [
+      {
+        axis: "horizontal",
+        lengthMm: $("spanWidth").value === "" ? null : +$("spanWidth").value,
+        tags: +$("spanCols").value,
+        limit: +$("cols").value,
+      },
+      {
+        axis: "vertical",
+        lengthMm: $("spanHeight").value === "" ? null : +$("spanHeight").value,
+        tags: +$("spanRows").value,
+        limit: +$("rows").value,
+      },
+    ]);
+    $("spacing").value = measured
+      ? measured.ratio.toFixed(8)
+      : +$("designSpacing").value;
+    box.className = measured?.mismatch > 0.005 ? "bad" : "";
+    if (!measured) {
+      box.textContent =
+        "No span measured yet. The preview uses the print-layout ratio; calibration needs an actual span measurement.";
+      return null;
+    }
+    box.replaceChildren(
+      "Average gap: ",
+      MathUI.element(measured.gapMm.toFixed(3) + String.raw`\,\mathrm{mm}`),
+      " · gap/tag ratio: ",
+      MathUI.element(measured.ratio.toFixed(6)),
+    );
+    const explanation = document.createElement("p");
+    explanation.textContent =
+      measured.directions.length === 1
+        ? "Calculated from one direction. Measure the other direction to check print scaling."
+        : `Horizontal / vertical pitch difference: ${(measured.mismatch * 100).toFixed(2)}%. ${measured.mismatch > 0.005 ? "Recheck measurements and both tag sides for uneven scaling." : "Measurements agree within 0.5%."}`;
+    box.append(explanation);
+    return measured;
+  } catch (error) {
+    box.className = "bad";
+    box.textContent = error.message;
+    throw error;
+  }
+}
+[
+  "element",
+  "spanWidth",
+  "spanHeight",
+  "spanCols",
+  "spanRows",
+  "designSpacing",
+].forEach((id) =>
+  $(id).addEventListener("input", () => {
+    try {
+      updateMeasurement();
+    } catch {}
+  }),
+);
+["cols", "rows"].forEach((id, index) =>
+  $(id).addEventListener("input", () => {
+    const input = $(index === 0 ? "spanCols" : "spanRows");
+    if (!$(index === 0 ? "spanWidth" : "spanHeight").value)
+      input.value = $(id).value;
+    try {
+      updateMeasurement();
+    } catch {}
+  }),
+);
 function download(name, text, type = "text/plain") {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement("a");
@@ -132,7 +227,7 @@ $("newSession").onclick = () =>
   action(async () => {
     stopTracking();
     await selectionQueue;
-    state = await api({ op: "new", config: config() });
+    state = await api({ op: "new", config: config(true) });
     files = {};
     render();
     go("capture");
@@ -531,6 +626,12 @@ $("load").onclick = () =>
     $("rows").value = c.rows;
     $("element").value = c.size * 1000;
     $("spacing").value = c.spacing;
+    $("designSpacing").value = c.spacing;
+    $("spanWidth").value = c.measurements?.horizontalMm ?? "";
+    $("spanHeight").value = c.measurements?.verticalMm ?? "";
+    $("spanCols").value = c.measurements?.horizontalTags ?? c.cols;
+    $("spanRows").value = c.measurements?.verticalTags ?? c.rows;
+    updateMeasurement();
     if (state.result) $("model").value = state.result.model;
     files = {};
     targetHelp();
