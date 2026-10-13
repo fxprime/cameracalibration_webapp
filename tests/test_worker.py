@@ -76,6 +76,33 @@ class WorkerTests(unittest.TestCase):
                 dict(op="capture", frame=self.encode(cv2.resize(original, (305, 215))))
             )
 
+    def test_coarse_detector_falls_back_for_a_tiny_tag(self):
+        from tracking import selected_corners
+        image = np.full((800,1280), 255, np.uint8)
+        image[380:404,600:624] = cv2.aruco.generateImageMarker(DICT, 0, 24)
+        corners, dimensions, fallback = selected_corners(image, 0, detector_width=128)
+        self.assertTrue(fallback)
+        self.assertEqual(dimensions, [1280,800])
+        self.assertEqual(len(corners), 1)
+
+    def test_resized_fisheye_pose_uses_original_camera_geometry(self):
+        K = np.float64([[900,0,640],[0,890,400],[0,0,1]])
+        D = np.float64([-.08,.008,-.001,.0001])
+        r = np.float64([[2.8],[.1],[.15]])
+        t = np.float64([[.04],[.02],[.6]])
+        s = .1
+        obj = np.float64([[-s/2,s/2,0],[s/2,s/2,0],[s/2,-s/2,0],[-s/2,-s/2,0]])
+        corners = project(obj,r,t,K,D,"fisheye").astype(np.float32)
+        H = cv2.getPerspectiveTransform(np.float32([[0,0],[400,0],[400,400],[0,400]]),corners)
+        image = cv2.warpPerspective(cv2.aruco.generateImageMarker(DICT,0,400),H,(1280,800),borderValue=255)
+        worker.result = dict(K=K.tolist(),D=D.tolist(),size=[1280,800],model="fisheye")
+        for width in (1280,960,640):
+            small=cv2.resize(image,(width,round(800*width/1280)),interpolation=cv2.INTER_AREA)
+            response=worker.handle(dict(op="track",compact=True,frame=self.encode(small),source_size=[1280,800],tagSize=s))
+            self.assertEqual(len(response["poses"]),1)
+            np.testing.assert_allclose(response["poses"][0]["translation"],t.ravel(),atol=.015)
+            np.testing.assert_allclose(response["poses"][0]["corners"],corners,atol=3)
+
     def test_preview_geometry_matches_opencv_and_keeps_calibration(self):
         K = np.float64([[300, 0, 160], [0, 305, 120], [0, 0, 1]])
         for model in ("radtan", "fisheye"):
@@ -127,6 +154,24 @@ class WorkerTests(unittest.TestCase):
         np.testing.assert_allclose(compact["poses"][0]["translation"], a["translation"], atol=1e-9)
         with self.assertRaisesRegex(ValueError, "frame length"):
             worker.handle(dict(q, compact=True, encoding="gray8", width=1280, height=800, frame="AA=="))
+        for width in (640, 960):
+            small = cv2.resize(image, (width, round(800*width/1280)), interpolation=cv2.INTER_AREA)
+            resized = worker.handle(dict(q, compact=True, encoding="gray8", width=small.shape[1], height=small.shape[0],
+                                         source_size=[1280,800], frame=base64.b64encode(small.tobytes()).decode()))
+            self.assertEqual(resized["input_size"], list(small.shape[1::-1]))
+            pose = resized["poses"][0]
+            self.assertLess(abs(pose["translation"][2]-.8), .025)
+            np.testing.assert_allclose(pose["corners"], p, atol=3)
+            self.assertEqual(len(pose["axis_pixels"]), 4)
+        with self.assertRaisesRegex(ValueError, "preserve"):
+            worker.handle(dict(q, frame=self.encode(cv2.resize(image,(640,300))), source_size=[1280,800]))
+        with self.assertRaisesRegex(ValueError, "quality"):
+            worker.handle(dict(q, max_rms=float("nan")))
+        from unittest.mock import patch
+        with patch("worker.project", return_value=np.zeros((4,2))):
+            rejected = worker.handle(dict(q, compact=True))
+            self.assertFalse(rejected["poses"])
+            self.assertEqual(rejected["rejected"][0]["reason"], "Reprojection error exceeds limit")
         q["scale"] = 2
         b = worker.handle(q)["poses"][0]
         self.assertLess(abs(a["translation"][2] - 0.8), 0.02)

@@ -15,6 +15,9 @@ let state = { views: [], result: null },
   poseLog = [],
   busy = false;
 let selectionQueue = Promise.resolve();
+let trackGeneration = 0, lastPoseText = 0, lastTrackCompletion = 0;
+let trackAbort = null, trackFrameCallback = 0;
+const trackingCaptureCanvas = document.createElement("canvas");
 let trackingRenderer = null, trackingGeometry = null, previewGeneration = 0, previewAnimation = 0;
 const note = (text, error = false) => {
   $("notice").textContent = text;
@@ -1074,11 +1077,15 @@ $("singleTag").onclick = () =>
   });
 function stopTracking() {
   tracking = false;
+  ++trackGeneration;
+  trackAbort?.abort();
+  if (trackFrameCallback && $("video").cancelVideoFrameCallback)
+    $("video").cancelVideoFrameCallback(trackFrameCallback);
+  trackFrameCallback = 0;
   ++previewGeneration;
   cancelAnimationFrame(previewAnimation);
   $("tracking").textContent = "Start tracking";
 }
-let trackGeneration = 0, lastPoseText = 0, lastTrackCompletion = 0;
 async function updateTrackingPreview() {
   const generation = ++previewGeneration;
   const enabled = $("trackUndistort").checked;
@@ -1119,23 +1126,36 @@ for (const id of ["trackUndistort","trackKeepBorder","trackMirror"]) {
   };
 }
 $("trackKeepBorder").disabled = !$("trackUndistort").checked;
+const savedTrackingResolution = localStorage.getItem("tracking-resolution");
+if (["0", "640", "960"].includes(savedTrackingResolution)) $("trackResolution").value = savedTrackingResolution;
+$("trackResolution").onchange = () => localStorage.setItem("tracking-resolution", $("trackResolution").value);
 // Tracking-only transport. The calibration frame() path remains lossless color PNG.
 async function trackingFrame() {
   const video = $("video");
   if (!stream || !video.videoWidth) throw Error("Connect a camera first.");
-  const canvas = $("frameCanvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  if (video.videoWidth !== state.result.size[0] || video.videoHeight !== state.result.size[1])
+    throw Error("Camera resolution must match calibration. Reconnect at the calibrated resolution.");
+  const maxRms = +$("trackMaxRms").value;
+  if (!Number.isFinite(maxRms) || maxRms < 0.1 || maxRms > 20)
+    throw Error("Maximum pixel error must be between 0.1 and 20.");
+  const canvas = trackingCaptureCanvas;
+  const requestedWidth = +$("trackResolution").value || video.videoWidth;
+  const width = Math.min(video.videoWidth, requestedWidth);
+  const height = Math.round(video.videoHeight * width / video.videoWidth);
+  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(video, 0, 0);
+  context.drawImage(video, 0, 0, width, height);
   const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
   const gray = new Uint8Array(canvas.width * canvas.height);
   for (let i = 0, j = 0; j < gray.length; i += 4, j++)
     gray[j] = (77 * rgba[i] + 150 * rgba[i + 1] + 29 * rgba[i + 2] + 128) >> 8;
+  trackAbort = new AbortController();
   const response = await fetch("/track", {
+    signal: trackAbort.signal,
     method: "POST",
     headers: { "Content-Type": "application/octet-stream", "X-Track-Settings": JSON.stringify({
       width: canvas.width, height: canvas.height,
+      source_size: [video.videoWidth, video.videoHeight], max_rms: maxRms,
       tagSize: +$("tagSize").value / 1000, scale: +$("scale").value, id: +$("tagId").value,
     }) },
     body: gray,
@@ -1163,7 +1183,6 @@ function trackingOverlay(pose) {
 $("tracking").onclick = () => {
   if (tracking) {
     stopTracking();
-    trackGeneration++;
     return;
   }
   if (!state.result || !stream) {
@@ -1191,7 +1210,7 @@ async function trackLoop(generation) {
     const now = performance.now();
     const interval = lastTrackCompletion ? now - lastTrackCompletion : now - started;
     lastTrackCompletion = now;
-    $("trackingRate").textContent = `Pose updates: ${(1000 / interval).toFixed(1)} / second · response ${(now - started).toFixed(0)} ms · vision ${d.processing_ms.toFixed(0)} ms`;
+    $("trackingRate").textContent = `Pose updates: ${(1000 / interval).toFixed(1)} / second · response ${(now - started).toFixed(0)} ms · vision ${d.processing_ms.toFixed(0)} ms · ${d.input_size.join(" × ")} pixels`;
     const p = d.poses[0];
     trackingOverlay(p);
     drawPose(p || null);
@@ -1222,6 +1241,7 @@ async function trackLoop(generation) {
         const warning = document.createElement("p");
         warning.textContent = p.ambiguous
           ? "⚠ Planar pose is ambiguous."
+          : p.small_tag ? "Small tag: depth may be noisy. Move closer or choose Native detail."
           : "Pose selected by positive depth and pixel error.";
         $("poseText").replaceChildren(
           heading,
@@ -1232,13 +1252,21 @@ async function trackLoop(generation) {
         );
       }
     } else {
-      $("poseText").textContent = "Selected tag not visible. No current pose.";
+      $("poseText").textContent = d.rejected.length
+        ? "Tag found, but its pose failed the pixel-error check. Hold steady or improve lighting."
+        : "Selected tag not detected. Move closer or choose Native detail. No current pose.";
     }
   } catch (e) {
+    if (!tracking || generation !== trackGeneration) return;
     note(e.message, true);
     stopTracking();
   }
-  if (tracking) setTimeout(() => trackLoop(generation), 0);
+  if (tracking && generation === trackGeneration) {
+    const video = $("video");
+    if (video.requestVideoFrameCallback)
+      trackFrameCallback = video.requestVideoFrameCallback(() => trackLoop(generation));
+    else setTimeout(() => trackLoop(generation), 16);
+  }
 }
 function drawPose(p) {
   const c = $("poseCanvas"),

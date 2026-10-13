@@ -8,6 +8,7 @@ from targets import detect, svg, DICT, validate
 from calibration import calibrate, project, pose
 from exports import exports, target_config
 from observations import thumbnail, board_outline
+from tracking import selected_corners
 import yaml
 
 ROOT = pathlib.Path("data")
@@ -19,9 +20,6 @@ config = None
 size = None
 session = None
 
-_tracking_params = cv2.aruco.DetectorParameters()
-_tracking_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
-TRACKING_DETECTOR = cv2.aruco.ArucoDetector(DICT, _tracking_params)
 
 
 def decode(s):
@@ -242,15 +240,30 @@ def handle(q):
             frame = np.frombuffer(raw, np.uint8).reshape(height, width)
         else:
             frame = decode(q["frame"])
-        if list(frame.shape[1::-1]) != result["size"]:
+        input_size = list(frame.shape[1::-1])
+        source_size = q.get("source_size", input_size)
+        if source_size != result["size"]:
             raise ValueError("Tracking resolution must match calibration")
+        width, height = input_size
+        native_width, native_height = source_size
+        if (width > native_width or height > native_height or width < 128
+                or abs(height - round(native_height * width / native_width)) > 1):
+            raise ValueError("Invalid tracking resize; preserve the full camera view")
+        pixel_scale = np.float64([native_width/width, native_height/height])
+        max_rms = float(q.get("max_rms", 3.0))
+        tag_id = int(q.get("id", 0))
+        if not np.isfinite(max_rms) or not .1 <= max_rms <= 20 or not 0 <= tag_id < DICT.bytesList.shape[0]:
+            raise ValueError("Invalid tracking quality settings")
         s = float(q["tagSize"])
         scale = float(q.get("scale", 1))
         if not 0.001 <= s <= 2 or not 0 < scale <= 1000:
             raise ValueError("Invalid size or scale")
         K = np.array(result["K"])
         D = np.array(result["D"])
-        cs, ids, _ = TRACKING_DETECTOR.detectMarkers(frame)
+        detection_started = time.perf_counter()
+        cs, detection_size, fallback = selected_corners(frame, tag_id, q.get("detector_width", 960))
+        detection_ms = (time.perf_counter()-detection_started)*1000
+        rejected = []
         poses = []
         obj = np.float64(
             [
@@ -260,9 +273,11 @@ def handle(q):
                 [-s / 2, -s / 2, 0],
             ]
         )
-        for p, i in zip(cs, ids.flatten() if ids is not None else []):
-            if int(i) != int(q.get("id", 0)):
-                continue
+        for p in cs:
+            i = tag_id
+            tag_pixels = float(np.min(np.linalg.norm(p.reshape(4,2)-np.roll(p.reshape(4,2),-1,axis=0),axis=1)))
+            # Pixel-center mapping preserves the original K and distorted pixel geometry.
+            p = (p.astype(np.float64) + .5) * pixel_scale - .5
             points = p.reshape(4, 1, 2).astype(np.float64)
             dist = D
             if result["model"] == "fisheye":
@@ -273,7 +288,8 @@ def handle(q):
             )
             candidates = []
             for r, t in zip(rs, ts):
-                if t[2, 0] > 0:
+                rotation = cv2.Rodrigues(r)[0]
+                if np.all((obj @ rotation.T + t.ravel())[:, 2] > 0):
                     error = float(
                         np.sqrt(
                             np.mean(
@@ -288,11 +304,15 @@ def handle(q):
                             )
                         )
                     )
-                    candidates.append((error, r, t))
+                    if np.isfinite(error) and np.all(np.isfinite(t)):
+                        candidates.append((error, r, t))
             candidates.sort(key=lambda x: x[0])
             if not candidates:
                 continue
             error, r, t = candidates[0]
+            if error > max_rms:
+                rejected.append(dict(id=tag_id, rms=error, reason="Reprojection error exceeds limit"))
+                continue
             R = cv2.Rodrigues(r)[0]
             translation = (t.ravel() * scale).tolist()
             poses.append(
@@ -302,6 +322,8 @@ def handle(q):
                     rotation=R.tolist(),
                     rvec=r.ravel().tolist(),
                     rms=error,
+                    tag_pixels=tag_pixels,
+                    small_tag=tag_pixels < 24,
                     tag_size_meters=s,
                     translation_scale=scale,
                     alternative_rms=candidates[1][0] if len(candidates) > 1 else None,
@@ -314,8 +336,11 @@ def handle(q):
             poses[-1]["corners"] = p.reshape(4, 2).tolist()
             if not q.get("compact"):
                 for j, color in [(1, (0, 0, 255)), (2, (0, 255, 0)), (3, (255, 0, 0))]:
-                    cv2.line(frame, tuple(pix[0]), tuple(pix[j]), color, 3)
-        response = dict(poses=poses, timestamp=time.time(), processing_ms=(time.perf_counter()-started)*1000)
+                    display_pix = ((pix+.5)/pixel_scale-.5).astype(int)
+                    cv2.line(frame, tuple(display_pix[0]), tuple(display_pix[j]), color, 3)
+        response = dict(poses=poses, timestamp=time.time(), processing_ms=(time.perf_counter()-started)*1000,
+                        detection_ms=detection_ms, input_size=input_size, detection_size=detection_size,
+                        full_resolution_fallback=fallback, rejected=rejected)
         if not q.get("compact"):
             response["overlay"] = png(frame)
         return response

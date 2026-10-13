@@ -11,7 +11,7 @@ elif [[ -x /Users/thanabadeebulunseechart/.pyenv/versions/3.12.11/bin/python3 ]]
 else
   export CALIB_PYTHON=python3
 fi
-cargo run &
+cargo run --release &
 lab_pid=$!
 trap 'kill -INT "$lab_pid" 2>/dev/null' INT TERM EXIT
 while kill -0 "$lab_pid" 2>/dev/null; do
