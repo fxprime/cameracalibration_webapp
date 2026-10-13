@@ -15,6 +15,7 @@ let state = { views: [], result: null },
   poseLog = [],
   busy = false;
 let selectionQueue = Promise.resolve();
+let trackingRenderer = null, trackingGeometry = null, previewGeneration = 0, previewAnimation = 0;
 const note = (text, error = false) => {
   $("notice").textContent = text;
   $("notice").classList.toggle("error", error);
@@ -1073,9 +1074,51 @@ $("singleTag").onclick = () =>
   });
 function stopTracking() {
   tracking = false;
+  ++previewGeneration;
+  cancelAnimationFrame(previewAnimation);
   $("tracking").textContent = "Start tracking";
 }
 let trackGeneration = 0, lastPoseText = 0, lastTrackCompletion = 0;
+async function updateTrackingPreview() {
+  const generation = ++previewGeneration;
+  const enabled = $("trackUndistort").checked;
+  $("trackingStage").classList.toggle("mirrored", $("trackMirror").checked);
+  $("trackKeepBorder").disabled = !enabled;
+  cancelAnimationFrame(previewAnimation);
+  $("trackingStage").classList.remove("undistorted");
+  $("trackUndistorted").hidden = true;
+  if (!enabled) return;
+  try {
+    const geometry = await api({op:"preview_geometry",keep_border:$("trackKeepBorder").checked});
+    if (generation !== previewGeneration) return;
+    if (!trackingRenderer) trackingRenderer = new TrackingPreview($("trackUndistorted"));
+    trackingGeometry = geometry;
+    $("trackingStage").classList.add("undistorted");
+    $("trackUndistorted").hidden = false;
+    const render = () => {
+      if (generation !== previewGeneration) return;
+      const video = $("trackVideo"), overlay = $("trackOverlay");
+      if (video.readyState >= 2 && overlay.width === geometry.size[0] && overlay.height === geometry.size[1])
+        trackingRenderer.draw(video, overlay, trackingGeometry);
+      previewAnimation = requestAnimationFrame(render);
+    };
+    render();
+  } catch (error) {
+    if (generation !== previewGeneration) return;
+    $("trackUndistort").checked = false;
+    $("trackKeepBorder").disabled = true;
+    note(error.message, true);
+  }
+}
+for (const id of ["trackUndistort","trackKeepBorder","trackMirror"]) {
+  const saved = localStorage.getItem(id);
+  if (saved !== null) $(id).checked = saved === "true";
+  $(id).onchange = () => {
+    localStorage.setItem(id, String($(id).checked));
+    updateTrackingPreview();
+  };
+}
+$("trackKeepBorder").disabled = !$("trackUndistort").checked;
 // Tracking-only transport. The calibration frame() path remains lossless color PNG.
 async function trackingFrame() {
   const video = $("video");
@@ -1130,6 +1173,8 @@ $("tracking").onclick = () => {
   tracking = true;
   const generation = ++trackGeneration;
   $("trackVideo").srcObject = stream;
+  trackingOverlay(null);
+  updateTrackingPreview();
   lastPoseText = lastTrackCompletion = 0;
   $("tracking").textContent = "Stop tracking";
   note(

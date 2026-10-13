@@ -1031,8 +1031,15 @@ projection_parameters:
         </div>
         <div class="two">
           <div class="card">
-            <div class="tracking-stage">
+            <div class="toolbar">
+              <label><input id="trackUndistort" type="checkbox" /> Undistort preview</label>
+              <label><input id="trackKeepBorder" type="checkbox" checked /> Keep borders</label>
+              <label><input id="trackMirror" type="checkbox" /> Mirror preview</label>
+            </div>
+            <p>1. Enable undistortion to straighten lens distortion. 2. Keep borders to show the wider view with black edges, or turn it off to crop them. 3. Mirror for easier positioning. These options change only the preview.</p>
+            <div class="tracking-stage" id="trackingStage">
               <video id="trackVideo" autoplay muted playsinline></video>
+              <canvas id="trackUndistorted" hidden></canvas>
               <canvas id="trackOverlay" aria-label="AprilTag pose axes"></canvas>
             </div>
             <p id="trackingRate">Live preview · waiting for tracking</p>
@@ -1088,6 +1095,7 @@ projection_parameters:
     <script src="math.js"></script>
     <script src="board-measurement.js"></script>
     <script src="capture-guide.js"></script>
+    <script src="tracking-preview.js"></script>
     <script src="app.js"></script>
     <script src="radial-fov.js"></script>
   </body>

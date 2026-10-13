@@ -76,6 +76,24 @@ class WorkerTests(unittest.TestCase):
                 dict(op="capture", frame=self.encode(cv2.resize(original, (305, 215))))
             )
 
+    def test_preview_geometry_matches_opencv_and_keeps_calibration(self):
+        K = np.float64([[300, 0, 160], [0, 305, 120], [0, 0, 1]])
+        for model in ("radtan", "fisheye"):
+            D = np.float64([-0.2, 0.03, 0.001, -0.002])
+            worker.result = dict(K=K.tolist(), D=D.tolist(), model=model, size=[320, 240])
+            original = str(worker.result)
+            matrices = []
+            for keep in (False, True):
+                geometry = worker.handle(dict(op="preview_geometry", keep_border=keep))
+                if model == "fisheye":
+                    expected = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, (320,240), np.eye(3), balance=float(keep))
+                else:
+                    expected, _ = cv2.getOptimalNewCameraMatrix(K, D, (320,240), float(keep), (320,240))
+                np.testing.assert_allclose(geometry["newK"], expected)
+                self.assertEqual(str(worker.result), original)
+                matrices.append(geometry["newK"])
+            self.assertLess(matrices[1][0][0], matrices[0][0][0])
+
     def test_actual_tag_tracking_and_translation_scale(self):
         K = np.float64([[800, 0, 640], [0, 800, 400], [0, 0, 1]])
         D = np.zeros(4)

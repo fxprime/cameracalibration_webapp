@@ -188,6 +188,17 @@ def handle(q):
         if frame is None:
             raise ValueError("Saved image is unavailable")
         return dict(image=png(frame))
+    if op == "preview_geometry":
+        if not result:
+            raise ValueError("Calibrate first")
+        K, D = np.array(result["K"]), np.array(result["D"])
+        wh = tuple(result["size"])
+        balance = 1.0 if q.get("keep_border", True) else 0.0
+        if result["model"] == "fisheye":
+            newK = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, wh, np.eye(3), balance=balance)
+        else:
+            newK, _ = cv2.getOptimalNewCameraMatrix(K, D, wh, balance, wh)
+        return dict(K=K.tolist(), D=D.flatten().tolist(), newK=newK.tolist(), size=list(wh), model=result["model"])
     if op == "preview":
         if not result:
             raise ValueError("Calibrate first")
