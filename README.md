@@ -57,6 +57,12 @@ Sessions live in `data/<date-id>/`: source PNGs, detected metric/image points, s
 
 Run `python -m unittest discover -s tests -v`, `cargo test`, and `node --check web/app.js` in the configured environment. `codegraph init -i .` initializes the code index; `codegraph sync .` updates it after edits. Git is initialized on `codex/calibration-lab`.
 
+## C++ / VINS-Mono lesson
+
+The optional code panels show a real-API C++ adapter for VINS-Mono’s camodocal interface and a standalone radial-to-FOV reference. Source and build notes live in `examples/cpp/`. The panels load these exact source files, so editing C++ automatically updates the lesson after reload. The integration adapter was compiler-checked against pinned upstream headers; linking/running it requires VINS-Mono’s built camera_model library. The independent C++17 reference is compiled and checked against OpenCV inverse projection in the tests.
+
+The lesson explains the `EquidistantCamera` / `KANNALA_BRANDT` naming and the VINS `k2..k5` versus OpenCV `k1..k4` mapping. `vins-mono.yaml` exports actual fitted camera parameters; it is not a full IMU/estimator configuration. The interactive radial curve inverts the first increasing forward-facing branch and exposes invalid parameter choices instead of fabricating an FOV.
+
 ## Primary references
 
 - [OpenCV calibration and PnP](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)

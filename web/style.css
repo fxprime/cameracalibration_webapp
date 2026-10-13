@@ -436,3 +436,28 @@ article,
   width: 100%;
   max-width: 500px;
 }
+#radialFovPlot {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+}
+details {
+  border-top: 1px solid #dde5e1;
+  margin: 20px 0;
+  padding-top: 18px;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #087f69;
+  line-height: 1.6;
+}
+details pre {
+  white-space: pre;
+  overflow-x: auto;
+}
+#radialAnswer > .equation {
+  padding: 3px 0;
+  background: transparent;
+  margin: 4px 0;
+}

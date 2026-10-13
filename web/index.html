@@ -318,6 +318,235 @@ distortion_coeffs:
             </div>
           </div>
         </div>
+
+        <div class="card" id="vinsLesson">
+          <small>FROM THEORY TO THE FEATURE TRACKER</small>
+          <h2>Read the real VINS-Mono camera interface</h2>
+          <p>
+            The tracker lifts each observed pixel through its calibrated camera
+            model into a 3D bearing. A bearing supplies a direction; it does not
+            supply scene depth. Projection maps the bearing back to the image to
+            check the model.
+          </p>
+          <div
+            class="equation"
+            data-math-display="true"
+            data-math="\begin{aligned}[u,v]^{\mathsf T}&amp;\xrightarrow{\operatorname{liftProjective}}\mathbf b=[b_x,b_y,b_z]^{\mathsf T}\\\left[x_n,y_n\right]^{\mathsf T}&amp;=[b_x/b_z,b_y/b_z]^{\mathsf T}\quad(b_z\ne0)\\\mathbf b&amp;\xrightarrow{\operatorname{spaceToPlane}}[\hat u,\hat v]^{\mathsf T}\end{aligned}"
+          ></div>
+          <p>
+            VINS-Mono’s feature tracker uses the normalized-plane coordinates
+            for feature geometry. Near <span data-math="b_z=0"></span>, division
+            becomes unstable; keep the unit bearing for a general ray
+            representation. The adapter below calls the actual factory and
+            camera methods, and can be added to VINS-Mono’s camera_model build.
+          </p>
+          <div class="sources">
+            <a
+              href="https://github.com/HKUST-Aerial-Robotics/VINS-Mono/blob/90dabb5ec79946ae42fd2e1e91d4e69aabe1e25d/feature_tracker/src/feature_tracker.cpp"
+              target="_blank"
+              >Tracker: undistortedPoints</a
+            ><a
+              href="https://github.com/HKUST-Aerial-Robotics/VINS-Mono/blob/90dabb5ec79946ae42fd2e1e91d4e69aabe1e25d/camera_model/src/camera_models/CameraFactory.cc"
+              target="_blank"
+              >Factory and YAML names</a
+            ><a
+              href="https://github.com/HKUST-Aerial-Robotics/VINS-Mono/blob/90dabb5ec79946ae42fd2e1e91d4e69aabe1e25d/camera_model/src/camera_models/EquidistantCamera.cc"
+              target="_blank"
+              >Actual Kannala–Brandt implementation</a
+            >
+          </div>
+          <details>
+            <summary>
+              C++ integration: load calibration → bearing → reprojection →
+              edge-ray FOV
+            </summary>
+            <p>
+              This is an integration example using the real VINS-Mono API. It
+              requires the built camera_model library and its Eigen/OpenCV/Boost
+              dependencies; the usual upstream build uses ROS/catkin.
+            </p>
+            <pre><code data-source="/examples/cpp/vins_camera_demo.cpp">Loading C++ example…</code></pre>
+          </details>
+          <h2>Kannala–Brandt: the names and coefficient order</h2>
+          <p>
+            In this VINS-Mono revision, the YAML model is
+            <code>KANNALA_BRANDT</code> and the C++ class is
+            <code>EquidistantCamera</code>. Its radial law is an odd polynomial
+            in ray angle. The zero-coefficient case is ideal equidistant
+            projection; the coefficients perturb that law.
+          </p>
+          <div
+            class="equation"
+            data-math-display="true"
+            data-math="\rho_d=\theta+k_2^{\mathrm{VINS}}\theta^3+k_3^{\mathrm{VINS}}\theta^5+k_4^{\mathrm{VINS}}\theta^7+k_5^{\mathrm{VINS}}\theta^9"
+          ></div>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Meaning</th>
+                  <th>OpenCV / this lab</th>
+                  <th>VINS-Mono / camodocal</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Angular coefficients, in order</td>
+                  <td><span data-math="[k_1,k_2,k_3,k_4]"></span></td>
+                  <td><span data-math="[k_2,k_3,k_4,k_5]"></span></td>
+                </tr>
+                <tr>
+                  <td>Focal lengths in pixels</td>
+                  <td><span data-math="[f_x,f_y]"></span></td>
+                  <td>
+                    <span data-math="[\mu,\nu]"></span> (YAML
+                    <code>mu, mv</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Principal point</td>
+                  <td><span data-math="[c_x,c_y]"></span></td>
+                  <td><span data-math="[u_0,v_0]"></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The symmetric four-coefficient angular polynomial corresponds to
+            this lab’s OpenCV fisheye / Kalibr equidistant model under the same
+            coordinate and skew assumptions. The broader Kannala–Brandt family
+            can have additional terms: the name alone is not enough to identify
+            a compatible model. Pinhole radtan coefficients are powers of
+            normalized-plane radius, so they cannot be renamed into angular KB
+            coefficients.
+          </p>
+          <details>
+            <summary>VINS-Mono YAML generated from your calibration</summary>
+            <p>
+              After fitting, choose <code>vins-mono.yaml</code> in Inspect &amp;
+              export. Pinhole results use <code>PINHOLE</code>; fisheye results
+              use <code>KANNALA_BRANDT</code> with the coefficient mapping
+              above. This is camera-model YAML, not a complete VINS
+              configuration: IMU extrinsics, timing, noise and tracker settings
+              still need their own calibration.
+            </p>
+            <pre><code>%YAML:1.0
+model_type: KANNALA_BRANDT
+camera_name: decxin
+image_width: 1920
+image_height: 1200
+projection_parameters:
+  k2: 0.0  # OpenCV k1
+  k3: 0.0  # OpenCV k2
+  k4: 0.0  # OpenCV k3
+  k5: 0.0  # OpenCV k4
+  mu: 1350.0  # fx
+  mv: 1350.0  # fy
+  u0: 960.0   # cx
+  v0: 600.0   # cy</code></pre>
+            <p>
+              These numbers are illustrative. The export uses your fitted
+              values.
+            </p>
+          </details>
+        </div>
+        <div class="card" id="radialFovLesson">
+          <small>ANGLE → RADIUS → IMAGE EDGE</small>
+          <h2>How radial projection determines FOV</h2>
+          <p>
+            A ray at angle <span data-math="\theta"></span> reaches normalized
+            image radius <span data-math="\rho_d=g(\theta)"></span>. With a
+            centered principal point and symmetric lens, the horizontal edge is
+            at <span data-math="\rho_{\mathrm{edge}}=w/(2f_x)"></span>. Invert
+            the radial law at that edge, then double the angle.
+          </p>
+          <div
+            class="equation"
+            data-math-display="true"
+            data-math="g(\theta_{\mathrm{edge}})=\frac{w}{2f_x},\qquad\operatorname{HFOV}=2\theta_{\mathrm{edge}}"
+          ></div>
+          <div class="two">
+            <div>
+              <canvas
+                id="radialFovPlot"
+                width="640"
+                height="360"
+                aria-label="Ray angle versus normalized image radius, with the image edge and inferred field of view"
+              ></canvas>
+              <p>
+                Green: selected model. Gray dashed: ideal pinhole. Orange
+                dashed: ideal equidistant. The horizontal edge-radius line meets
+                the selected curve at the half-FOV angle.
+              </p>
+            </div>
+            <div>
+              <label
+                >Projection model<select id="radialModel">
+                  <option value="pinhole">
+                    Pinhole + radial (tangential terms zero)
+                  </option>
+                  <option value="kb">Kannala–Brandt / equidistant</option>
+                </select></label
+              >
+              <label
+                >Focal length in pixels<input
+                  id="radialFocal"
+                  type="range"
+                  min="400"
+                  max="1800"
+                  step="10"
+                  value="1350"
+              /></label>
+              <label
+                >First radial / angular coefficient<input
+                  id="radialCoefficient"
+                  type="range"
+                  min="-0.2"
+                  max="0.3"
+                  step="0.01"
+                  value="0"
+              /></label>
+              <div id="radialLaw" class="equation"></div>
+              <div id="radialAnswer" class="equation"></div>
+              <p id="radialWarning"></p>
+            </div>
+          </div>
+          <p>
+            For a zero-distortion pinhole,
+            <span data-math="g(\theta)=\tan\theta"></span>, recovering
+            <span data-math="\operatorname{HFOV}=2\arctan(w/(2f_x))"></span>.
+            For ideal equidistant, <span data-math="g(\theta)=\theta"></span>,
+            so <span data-math="\operatorname{HFOV}=w/f_x"></span> in radians.
+            At the same sensor width and pixel focal length, these yield
+            different FOVs.
+          </p>
+          <p>
+            This demonstration holds width at
+            <span data-math="w=1920\,\mathrm{px}"></span>, centers the principal
+            point, and uses only the first coefficient. Changing model or
+            coefficients changes the interpretation of the pixels, not the
+            physical lens. For real calibration, use all fitted terms and
+            inverse-project the actual edge pixels; tangential distortion needs
+            a 2D inverse. This demo stops at the first non-increasing branch and
+            only covers forward-facing rays below
+            <span data-math="90^\circ"></span>.
+          </p>
+          <details>
+            <summary>
+              Runnable C++ reference: radial law and bounded FOV inversion
+            </summary>
+            <p>
+              This standalone implementation uses the same symmetric forward
+              equations. Its bounded bisection inverse is educational; VINS-Mono
+              uses a different polynomial-root backprojection. Compile with a
+              standard C++17 compiler.
+            </p>
+            <pre><code data-source="/examples/cpp/radial_fov.cpp">Loading C++ example…</code></pre>
+            <pre><code>c++ -std=c++17 -O2 radial_fov.cpp -o radial_fov
+./radial_fov pinhole 1920 1350 0
+./radial_fov kb 1920 1350 0</code></pre>
+          </details>
+        </div>
         <button class="primary next" data-go="target">
           Configure a target →
         </button>
@@ -449,7 +678,9 @@ distortion_coeffs:
           <label
             >Lens model<select id="model">
               <option value="radtan">Pinhole + radtan (4 coefficients)</option>
-              <option value="fisheye">Pinhole + equidistant (fisheye)</option>
+              <option value="fisheye">
+                Fisheye · equidistant / Kannala–Brandt
+              </option>
             </select></label
           ><label
             >Review threshold (px RMS)<input
@@ -549,7 +780,9 @@ distortion_coeffs:
             <span data-math="\mathbf K,\mathbf D,\mathbf R,\mathbf P"></span>.
             OpenCV uses typed matrix nodes. Kalibr uses intrinsics
             <span data-math="[f_x,f_y,c_x,c_y]"></span> with an explicit
-            distortion model. No camera–IMU or stereo transform is fabricated.
+            distortion model. The VINS-Mono export uses camodocal’s
+            model-specific fields. No camera–IMU or stereo transform is
+            fabricated.
           </p>
           <select id="format" aria-label="Export format"></select
           ><button id="saveExport">Download selected export</button>
@@ -625,5 +858,6 @@ distortion_coeffs:
     <script src="vendor/katex/katex.min.js"></script>
     <script src="math.js"></script>
     <script src="app.js"></script>
+    <script src="radial-fov.js"></script>
   </body>
 </html>

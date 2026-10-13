@@ -31,6 +31,24 @@ def exports(r, c):
             cam_overlaps=[],
         )
     )
+    vins = dict(
+        model_type="KANNALA_BRANDT" if r["model"] == "fisheye" else "PINHOLE",
+        camera_name="decxin",
+        image_width=w,
+        image_height=h,
+    )
+    if r["model"] == "fisheye":
+        vins["projection_parameters"] = dict(
+            zip(
+                ["k2", "k3", "k4", "k5", "mu", "mv", "u0", "v0"],
+                D + [float(K[0, 0]), float(K[1, 1]), float(K[0, 2]), float(K[1, 2])],
+            )
+        )
+    else:
+        vins["distortion_parameters"] = dict(zip(["k1", "k2", "p1", "p2"], D))
+        vins["projection_parameters"] = dict(
+            fx=float(K[0, 0]), fy=float(K[1, 1]), cx=float(K[0, 2]), cy=float(K[1, 2])
+        )
     target = target_config(c)
     fd, path = tempfile.mkstemp(suffix=".yaml")
     os.close(fd)
@@ -50,6 +68,7 @@ def exports(r, c):
         "kalibr.yaml": yaml.safe_dump(kal, sort_keys=False),
         "target.yaml": yaml.safe_dump(target, sort_keys=False),
         "opencv.yaml": opencv,
+        "vins-mono.yaml": "%YAML:1.0\n---\n" + yaml.safe_dump(vins, sort_keys=False),
         "report.json": __import__("json").dumps(r, indent=2),
     }
 

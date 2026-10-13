@@ -66,6 +66,7 @@ async fn main() {
             "/health",
             get(|| async { Json(json!({"app":"Camera Calibration Lab"})) }),
         )
+        .nest_service("/examples", ServeDir::new("examples"))
         .fallback_service(ServeDir::new("web"))
         .layer(DefaultBodyLimit::max(24 * 1024 * 1024))
         .with_state(worker);

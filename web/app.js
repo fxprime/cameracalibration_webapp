@@ -495,6 +495,7 @@ $("export").onclick = () =>
         "opencv.yaml",
         "kalibr.yaml",
         "target.yaml",
+        "vins-mono.yaml",
         "report.json",
       ].map((n) => new Option(n, n)),
     );
