@@ -1,0 +1,393 @@
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  color: #213c50;
+  background: #f4f6f5;
+  font-size: 16px;
+  --accent: #087f69;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+aside {
+  width: 235px;
+  background: #102d3b;
+  color: #e6f3ee;
+  position: fixed;
+  height: 100vh;
+  padding: 32px 23px;
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  font-size: 12px;
+  letter-spacing: 2px;
+  line-height: 1.7;
+}
+.brand b {
+  font-size: 25px;
+  letter-spacing: -0.5px;
+}
+.logo {
+  font-size: 32px;
+  color: #73d6b6;
+  float: left;
+  margin-right: 12px;
+}
+aside .muted {
+  color: #a6c1c5;
+  font-size: 13px;
+}
+nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 36px;
+}
+nav button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #b8ced2;
+  padding: 13px 10px;
+}
+nav button.active {
+  background: #234b54;
+  color: #fff;
+  border-left: 3px solid #6ce1ba;
+  border-radius: 3px;
+}
+.aside-bottom {
+  margin-top: auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.aside-bottom p {
+  font-size: 13px;
+  letter-spacing: 0;
+  line-height: 1.7;
+  color: #a6c1c5;
+}
+.aside-bottom button,
+.aside-bottom select {
+  width: 100%;
+  font-size: 12px;
+}
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 100%;
+  background: #62cbae;
+  margin-right: 5px;
+}
+main {
+  margin-left: 235px;
+  padding: 35px 42px;
+  max-width: 1700px;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 25px;
+}
+small {
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  color: #66808c;
+}
+h1 {
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+  margin: 8px 0;
+}
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 10px 0 16px;
+}
+p {
+  line-height: 1.65;
+  color: #526974;
+  font-size: 14px;
+}
+button {
+  background: #fff;
+  color: #234653;
+  border: 1px solid #cfdbd8;
+  border-radius: 7px;
+  padding: 11px 16px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+button:hover {
+  background: #e0eee8;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.primary:hover {
+  background: #066651;
+}
+.next {
+  margin: 22px 0;
+}
+.page {
+  display: none;
+}
+.page.active {
+  display: block;
+}
+.card {
+  background: #fff;
+  border: 1px solid #dde5e1;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.lesson-top,
+.split {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 24px;
+}
+.lesson-top {
+  margin-bottom: 15px;
+}
+.equation {
+  background: #eff5f3;
+  padding: 16px;
+  border-radius: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #184e44;
+  white-space: normal;
+  margin: 15px 0;
+}
+.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+label {
+  display: block;
+  font-size: 13px;
+  color: #4c6871;
+  margin: 12px 0;
+}
+input:not([type="checkbox"]),
+select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cbdad5;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  background: white;
+  color: #243f4f;
+  margin-top: 7px;
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+input[type="file"] {
+  font-size: 12px;
+}
+#notice {
+  padding: 13px 16px;
+  background: #e2efe9;
+  color: #25634d;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  font-size: 14px;
+}
+#notice.error {
+  background: #fae9df;
+  color: #974c24;
+}
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.toolbar label {
+  margin: 0;
+  max-width: 260px;
+}
+.toolbar input[type="number"] {
+  max-width: 100px;
+}
+.toolbar button {
+  margin-bottom: 1px;
+}
+svg,
+img,
+video {
+  max-width: 100%;
+}
+video,
+img {
+  border-radius: 7px;
+  width: 100%;
+}
+.live {
+  background: #e7eeea;
+}
+.live video {
+  min-height: 260px;
+  background: #152e37;
+  object-fit: contain;
+}
+#targetPreview {
+  background: #eaf0ed;
+  overflow: auto;
+  max-height: 440px;
+  padding: 25px;
+  text-align: center;
+}
+#targetPreview svg {
+  max-height: 360px;
+}
+#target .card button {
+  margin: 6px 5px 6px 0;
+}
+.muted {
+  color: #758b93;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #eff4f1;
+  border-radius: 8px;
+  padding: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+a {
+  color: var(--accent);
+}
+.tablewrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  padding: 13px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e4ebe6;
+}
+th {
+  color: #6c838c;
+  font-weight: 500;
+}
+.bad {
+  color: #b85629;
+}
+.metric {
+  font-size: 30px;
+  color: #087f69;
+  line-height: 1.4;
+}
+.metric.bad {
+  color: #b85629;
+}
+#coverage,
+#poseCanvas {
+  width: 100%;
+  max-width: 600px;
+}
+footer {
+  font-size: 11px;
+  color: #819499;
+  margin-top: 30px;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #69bfa4;
+  outline-offset: 2px;
+}
+@media (max-width: 1050px) {
+  main {
+    padding: 28px 24px;
+  }
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .split,
+  .lesson-top {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  aside {
+    position: relative;
+    width: 100%;
+    height: auto;
+    padding: 18px;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 15px;
+    gap: 2px;
+  }
+  nav button {
+    padding: 9px;
+    font-size: 12px;
+  }
+  .aside-bottom {
+    display: none;
+  }
+  main {
+    margin-left: 0;
+    padding: 20px;
+  }
+  .two {
+    grid-template-columns: 1fr;
+  }
+  h1 {
+    font-size: 25px;
+  }
+  header {
+    align-items: flex-start;
+  }
+}

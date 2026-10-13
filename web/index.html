@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Camera Calibration Lab</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <aside>
+      <div class="brand">
+        <span class="logo">◉</span> CALIBRATION<br /><b>Camera Lab</b>
+      </div>
+      <p class="muted">From pixels to geometry</p>
+      <nav id="nav"></nav>
+      <div class="aside-bottom">
+        <span class="dot"></span> LOCAL WORKSPACE
+        <p>DECXIN · AR0234<br />Single camera / AprilTag pose</p>
+        <button id="resume">Open saved session</button
+        ><select id="sessions" aria-label="Saved session"></select
+        ><button id="load">Load session</button>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <small id="eyebrow">LEARN THE GEOMETRY</small>
+          <h1 id="title">A camera turns rays into pixels.</h1>
+        </div>
+        <button id="skip">Skip tutorial →</button>
+      </header>
+      <div id="notice" role="status" aria-live="polite">
+        Ready. Start with the lesson, or go straight to calibration.
+      </div>
+      <section id="learn" class="page active">
+        <div class="lesson-top">
+          <div>
+            <h2>What are we finding?</h2>
+            <p>
+              Calibration estimates the camera’s internal geometry. With it, a
+              pixel becomes a direction in 3D, and a known target can provide
+              metric pose.
+            </p>
+            <div class="equation">
+              Before distortion: λ [u, v, 1]ᵀ = K [R | t] [X, Y, Z, 1]ᵀ
+            </div>
+            <p>
+              <b>K</b>: focal lengths fₓ, fᵧ and principal point cₓ, cᵧ.<br /><b
+                >D</b
+              >: lens distortion. <b>R, t</b>: target pose for each view.
+            </p>
+            <div class="equation">
+              K = ⎡ fₓ 0 cₓ ⎤<br />　　⎢ 0 fᵧ cᵧ ⎥<br />　　⎣ 0 0 1 ⎦
+            </div>
+          </div>
+          <div class="card">
+            <svg
+              id="ray"
+              viewBox="0 0 500 260"
+              aria-label="Pinhole camera rays and field of view"
+            >
+              <path
+                d="M35 35L255 130L450 220 M35 225L255 130L450 40"
+                fill="none"
+                stroke="#6486b3"
+                stroke-width="2"
+              />
+              <path d="M450 25V235" stroke="#162f47" stroke-width="7" />
+              <circle cx="255" cy="130" r="8" fill="#18a588" />
+              <path
+                d="M220 100Q203 130 220 160"
+                fill="none"
+                stroke="#e38748"
+                stroke-width="3"
+              />
+              <text x="20" y="20">Scene</text>
+              <text x="212" y="185">Pinhole</text>
+              <text x="370" y="255">Virtual image plane</text>
+              <text x="288" y="115">focal length</text></svg
+            ><label
+              >Focal length in pixels
+              <input
+                id="focal"
+                type="range"
+                min="300"
+                max="2400"
+                value="1350" /></label
+            ><strong id="fov"></strong>
+            <p class="muted">
+              For a centered, undistorted pinhole: HFOV = 2 atan(width / 2fₓ).
+              Real distorted FOV requires the fitted model. Sensor size and lens
+              focal length in mm are different from fₓ in pixels.
+            </p>
+          </div>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <small>01 / CAMERA MODEL</small>
+            <h2>Pinhole + radtan</h2>
+            <p>
+              A sensible starting model for this module’s moderate field of
+              view. Fit fₓ, fᵧ, cₓ, cᵧ and k₁, k₂, p₁, p₂. k₃ stays fixed to
+              avoid needless complexity.
+            </p>
+            <div class="equation">
+              x = X/Z, y = Y/Z, r² = x²+y²<br />x′ = x(1+k₁r²+k₂r⁴)<br />　+
+              2p₁xy + p₂(r²+2x²)<br />u = fₓx′ + cₓ
+            </div>
+            <p>
+              y′ uses the analogous tangential terms. Calibration minimizes
+              pixel reprojection residuals across all views.
+            </p>
+          </article>
+          <article class="card">
+            <small>02 / WIDE ANGLE</small>
+            <h2>Pinhole + equidistant</h2>
+            <p>
+              OpenCV’s fisheye model and Kalibr’s equidistant distortion use
+              four angular coefficients. Choose it when the lens geometry
+              warrants it; compare held-out performance.
+            </p>
+            <div class="equation">
+              θ = atan(√(x²+y²))<br />θd = θ(1+k₁θ²+k₂θ⁴+k₃θ⁶+k₄θ⁸)
+            </div>
+            <p>
+              Do not choose a model from a single FOV threshold or transplant
+              coefficients between models.
+            </p>
+          </article>
+          <article class="card">
+            <small>03 / WHY MANY VIEWS?</small>
+            <h2>Give the solver evidence</h2>
+            <p>
+              A front-facing board at one distance does not constrain
+              everything. Tilt it around two axes, vary distance, and cover the
+              edges.
+            </p>
+            <svg viewBox="0 0 240 100" aria-label="Varied target poses">
+              <path
+                d="M10 15H65V80H10Z M95 20L145 5L155 78L105 90Z M180 35L232 10L222 65L170 90Z"
+                fill="#dcece6"
+                stroke="#159a7e"
+                stroke-width="3"
+              />
+            </svg>
+            <p>
+              Fit at least 10 views; aim for 20–40 sharp, diverse views plus
+              separate validation images. Keep focus, resolution, crop and lens
+              fixed.
+            </p>
+          </article>
+        </div>
+        <div class="card">
+          <h2>What “good” means for VIO and 3D scanning</h2>
+          <p>
+            Start with a practical review threshold of 0.5 px RMS; this is a lab
+            target, not a universal certification. Inspect residuals and
+            held-out views, coverage, pose diversity, parameter stability and
+            the undistorted image. A low training error can still hide a bent
+            board or a wrong lens model.
+          </p>
+          <p>
+            OpenVINS recommends careful camera and camera–IMU calibration.
+            ORB-SLAM3 supports pinhole and fisheye cameras. Intrinsics are only
+            one part: VIO also needs camera–IMU geometry and timing;
+            multi-camera scanning needs camera extrinsics. This lab does
+            single-camera intrinsics and tag pose.
+          </p>
+          <p>
+            Global shutter still blurs during exposure. Keep the board still,
+            add light, lock short exposure when the camera permits, and avoid
+            extreme gain. Sharpening cannot recover accurate corners lost to
+            motion blur.
+          </p>
+          <div class="equation">
+            RMS = √[ (1/N) Σᵢ ((uᵢ − ûᵢ)² + (vᵢ − v̂ᵢ)²) ]
+          </div>
+          <p>
+            Every corner is compared with its model projection. Reserve new
+            views to check whether the fitted geometry generalizes.
+          </p>
+          <div class="sources">
+            <a
+              href="https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html"
+              target="_blank"
+              >OpenCV solver</a
+            ><a
+              href="https://github.com/ethz-asl/kalibr/wiki/Calibration-targets"
+              target="_blank"
+              >Kalibr targets</a
+            ><a
+              href="https://github.com/ethz-asl/kalibr/wiki/yaml-formats"
+              target="_blank"
+              >Kalibr YAML</a
+            ><a
+              href="https://docs.openvins.com/gs-calibration.html"
+              target="_blank"
+              >OpenVINS practice</a
+            ><a href="https://github.com/UZ-SLAMLab/ORB_SLAM3" target="_blank"
+              >ORB-SLAM3 models</a
+            >
+          </div>
+        </div>
+        <div class="card">
+          <h2>Real configurations used by VIO repositories</h2>
+          <div class="two">
+            <div>
+              <h2>EuRoC · OpenVINS</h2>
+              <pre>
+resolution: [752, 480]
+camera_model: pinhole
+distortion_model: radtan
+intrinsics: [458.654, 457.296, 367.215, 248.375]
+distortion_coeffs:
+  [-0.28340811, 0.07395907, 0.00019359, 0.0000176187]</pre>
+              <a
+                href="https://github.com/rpng/open_vins/blob/master/config/euroc_mav/kalibr_imucam_chain.yaml"
+                target="_blank"
+                >Inspect the repository configuration</a
+              >
+            </div>
+            <div>
+              <h2>TUM VI · OpenVINS</h2>
+              <pre>
+resolution: [512, 512]
+camera_model: pinhole
+distortion_model: equidistant
+intrinsics: [190.97848, 190.97331, 254.93171, 256.89744]
+distortion_coeffs:
+  [0.00348239, 0.00071503, -0.00205324, 0.00020294]</pre>
+              <a
+                href="https://github.com/rpng/open_vins/blob/master/config/tum_vi/kalibr_imucam_chain.yaml"
+                target="_blank"
+                >Inspect the repository configuration</a
+              >
+            </div>
+          </div>
+          <p>
+            These are actual example intrinsics from the project, not accuracy
+            guarantees or values to copy to your camera. The small equidistant
+            coefficients do not mean the TUM VI lens behaves like an undistorted
+            pinhole: the angular projection is already part of its model.
+          </p>
+          <p>
+            For 3D reconstruction,
+            <a
+              href="https://www.open3d.org/docs/release/tutorial/pipelines/rgbd_integration.html"
+              target="_blank"
+              >Open3D RGB-D integration</a
+            >
+            uses a pinhole intrinsic matrix alongside depth scale and camera
+            poses. Correct lens distortion before a pipeline that expects
+            rectified pinhole images, and supply the corresponding new K.
+            Intrinsic calibration does not replace depth-camera alignment or
+            depth-scale calibration.
+          </p>
+        </div>
+        <div class="card">
+          <h2>See radial distortion change a grid</h2>
+          <div class="two">
+            <div>
+              <canvas
+                id="distortionCanvas"
+                width="500"
+                height="300"
+                aria-label="Simulated radial distortion of straight grid lines"
+              ></canvas>
+            </div>
+            <div>
+              <label
+                >Educational k₁
+                <input
+                  id="distortionK"
+                  type="range"
+                  min="-0.3"
+                  max="0.3"
+                  value="-0.15"
+                  step="0.01"
+              /></label>
+              <div class="equation">x′ = x(1 + k₁r²)<br />y′ = y(1 + k₁r²)</div>
+              <p>
+                This simplified simulation changes radial distortion only. Move
+                the slider to compare barrel and pincushion shapes. Real
+                calibration fits distortion together with focal lengths,
+                principal point and board poses.
+              </p>
+              <strong id="distortionLabel"></strong>
+            </div>
+          </div>
+        </div>
+        <button class="primary next" data-go="target">
+          Configure a target →
+        </button>
+      </section>
+      <section id="target" class="page">
+        <div class="split">
+          <div class="card">
+            <h2>Choose and measure your board</h2>
+            <label
+              >Pattern<select id="pattern">
+                <option value="aprilgrid">AprilGrid · tag36h11</option>
+                <option value="checkerboard">Checkerboard</option>
+              </select></label
+            >
+            <div class="two">
+              <label
+                >Columns<input
+                  id="cols"
+                  type="number"
+                  value="6"
+                  min="2"
+                  max="20" /></label
+              ><label
+                >Rows<input id="rows" type="number" value="6" min="2" max="20"
+              /></label>
+            </div>
+            <label
+              >Black tag edge / square size (mm)<input
+                id="element"
+                type="number"
+                value="25"
+                min="2"
+                max="500"
+                step="0.1" /></label
+            ><label
+              >Gap / black tag edge ratio<input
+                id="spacing"
+                type="number"
+                value="0.3"
+                min="0.1"
+                max="1"
+                step="0.05"
+            /></label>
+            <p id="targetHelp"></p>
+            <button id="generate">Update target preview</button
+            ><button id="downloadTarget">Download true-size SVG</button
+            ><button id="print">Print target</button
+            ><button id="targetConfig">Download target YAML</button
+            ><button class="primary" id="newSession">Use this target →</button>
+          </div>
+          <div class="card">
+            <div id="targetPreview"></div>
+            <p>
+              <b>Print at 100% / actual size.</b> Disable fit-to-page. A board
+              larger than your paper requires larger paper; never silently
+              shrink it. Measure the printed black tag edge or square size with
+              a ruler and enter the measured size. Glue to a flat, rigid
+              backing.
+            </p>
+            <p>
+              AprilGrid: coded IDs tolerate partial visibility and remove
+              checkerboard orientation ambiguity. Checkerboard: cheap, precise
+              subpixel corners, but all internal corners must be visible here. A
+              9×6 internal-corner board has 10×7 squares.
+            </p>
+            <p>
+              Keep a white border. Our AprilGrid uses IDs from zero,
+              left-to-right starting at the bottom row, with tag36h11.
+              Single-tag pose uses the measured black outer edge, excluding
+              white margin.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section id="capture" class="page">
+        <div class="toolbar">
+          <select id="camera" aria-label="Camera"></select
+          ><button id="connect">Connect camera</button
+          ><button id="disconnect">Stop camera</button
+          ><label>Width <input id="width" type="number" value="1920" /></label
+          ><label>Height <input id="height" type="number" value="1200" /></label
+          ><label>FPS <input id="fps" type="number" value="30" /></label>
+        </div>
+        <div class="split">
+          <div class="card live">
+            <video id="video" autoplay playsinline muted></video
+            ><canvas id="frameCanvas" hidden></canvas
+            ><img
+              id="detection"
+              alt="Captured target with detected corners"
+              hidden
+            />
+            <p id="streamInfo">
+              Camera permission will be requested by your browser. Select the
+              DECXIN camera.
+            </p>
+          </div>
+          <div class="card">
+            <small>CAPTURE WITH INTENT</small>
+            <h2 id="guide">Start near the center</h2>
+            <p id="guidance">
+              Hold the board still and make its corners sharp. Then capture.
+            </p>
+            <label
+              ><input id="holdout" type="checkbox" /> Save as validation
+              only</label
+            ><button class="primary" id="captureFrame">Capture this view</button
+            ><label
+              >Or import images<input
+                id="upload"
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/tiff,image/webp"
+            /></label>
+            <p>
+              Captures are manual. No control refresh or automatic exposure
+              changes. Source dimensions are preserved. Browser frames are saved
+              as lossless PNG, but the browser does not expose Bayer RAW or
+              guarantee the camera’s USB transport format.
+            </p>
+            <button data-go="review">Review & fit →</button>
+          </div>
+        </div>
+        <div id="captureCount" class="card">No captures yet.</div>
+      </section>
+      <section id="review" class="page">
+        <div class="toolbar">
+          <label
+            >Lens model<select id="model">
+              <option value="radtan">Pinhole + radtan (4 coefficients)</option>
+              <option value="fisheye">Pinhole + equidistant (fisheye)</option>
+            </select></label
+          ><label
+            >Review threshold (px RMS)<input
+              id="threshold"
+              type="number"
+              min="0.05"
+              max="10"
+              step="0.05"
+              value="0.5" /></label
+          ><button class="primary" id="fit">Fit selected views</button
+          ><button id="flag">Suggest high-error exclusions</button
+          ><button data-go="capture">Capture more</button>
+        </div>
+        <div id="stats" class="cards"></div>
+        <div id="warnings"></div>
+        <div id="intrinsics" class="card" hidden></div>
+        <div class="card">
+          <h2>Every view is inspectable</h2>
+          <p>
+            Keep = fit or validate. Validation views never enter the intrinsic
+            fit. Uncheck a suspect view, then refit. Do not remove difficult
+            edge views just to lower the score.
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Keep</th>
+                  <th>Validation</th>
+                  <th>View</th>
+                  <th>Corners</th>
+                  <th>Sharpness*</th>
+                  <th>RMS px</th>
+                  <th>95% px</th>
+                  <th>Inspect</th>
+                </tr>
+              </thead>
+              <tbody id="views"></tbody>
+            </table>
+          </div>
+          <small
+            >*Laplacian variance is an unnormalized hint, not a universal
+            sharpness threshold.</small
+          >
+        </div>
+        <div class="card">
+          <h2>View centers</h2>
+          <canvas id="coverage" width="600" height="240"></canvas>
+          <p>
+            Green: training view centers. Orange: validation view centers. The
+            coverage metric above uses all detected training corners across a
+            4×3 image grid. Capture varied tilts and distances too.
+          </p>
+        </div>
+        <button class="primary next" data-go="result">
+          Inspect images & export →
+        </button>
+      </section>
+      <section id="result" class="page">
+        <div class="toolbar">
+          <label>View<select id="previewView"></select></label
+          ><label
+            >Border balance<input
+              id="balance"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0" /></label
+          ><button id="preview">Show undistortion</button
+          ><button id="export">Generate exports</button>
+        </div>
+        <div class="two">
+          <div class="card">
+            <h2>Observed vs reprojected</h2>
+            <img
+              id="original"
+              alt="Green observed corners and red reprojected corners"
+            />
+            <p>Green dots: detector. Red circles: model predictions.</p>
+          </div>
+          <div class="card">
+            <h2>Undistorted</h2>
+            <img id="undistorted" alt="Undistorted calibration view" />
+            <p id="newK">
+              Rectification changes the camera matrix. Use the displayed new K
+              with this corrected image.
+            </p>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Export formats</h2>
+          <p>
+            ROS camera_info YAML uses K, D, R, P. OpenCV uses typed matrix
+            nodes. Kalibr uses intrinsics [fx, fy, cx, cy] with an explicit
+            distortion model. No camera–IMU or stereo transform is fabricated.
+          </p>
+          <select id="format" aria-label="Export format"></select
+          ><button id="saveExport">Download selected export</button>
+          <pre id="exportText"></pre>
+        </div>
+        <button class="primary next" data-go="track">
+          Track an AprilTag →
+        </button>
+      </section>
+      <section id="track" class="page">
+        <div class="toolbar">
+          <label
+            >Tag ID<input
+              id="tagId"
+              type="number"
+              value="0"
+              min="0"
+              max="586" /></label
+          ><label
+            >Black edge (mm)<input
+              id="tagSize"
+              type="number"
+              value="25"
+              min="1"
+              step="0.1" /></label
+          ><label
+            >Translation scale<input
+              id="scale"
+              type="number"
+              value="1"
+              min="0.001"
+              step="0.1" /></label
+          ><button id="singleTag">Download this tag</button
+          ><button class="primary" id="tracking">Start tracking</button>
+        </div>
+        <div class="two">
+          <div class="card">
+            <img id="trackImage" alt="AprilTag pose axes" />
+            <p>Axes: red X, green Y, blue Z in tag coordinates.</p>
+          </div>
+          <div class="card">
+            <h2>Tag position in camera coordinates</h2>
+            <canvas id="poseCanvas" width="600" height="300"></canvas>
+            <pre id="poseText">
+Calibrate, connect camera, then start tracking.</pre>
+            <p>
+              X right · Y down · Z forward, in metres × scale. Translation is
+              the tag center. Rotation maps tag coordinates into camera
+              coordinates. Known tag size supplies metric scale; this is not
+              arbitrary-scene depth or VIO.
+            </p>
+            <p>
+              Two planar solutions may fit similarly. Oblique views, a larger
+              tag, sharp corners and multiple tags help. An ambiguity warning
+              means depth/orientation should be treated cautiously.
+            </p>
+            <button id="poseExport">Download pose log JSON</button>
+          </div>
+        </div>
+      </section>
+      <footer>
+        Camera Calibration Lab · OpenCV numerical methods · Local data only ·
+        <span id="sessionName">No session</span>
+      </footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
