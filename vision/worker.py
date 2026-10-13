@@ -271,6 +271,9 @@ def handle(q):
 
 
 if __name__ == "__main__":
+    import signal
+
+    signal.signal(signal.SIGINT, signal.SIG_IGN)  # Rust owns graceful shutdown.
     for line in sys.stdin:
         try:
             answer = handle(json.loads(line))

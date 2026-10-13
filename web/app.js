@@ -357,9 +357,13 @@ function render() {
         return p;
       }),
     );
-  } else if (!state.views.length) {
-    $("stats").innerHTML = "";
+  } else {
+    $("stats").innerHTML = state.views.length
+      ? '<div class="card">Fit the current selection to compute valid calibration results.</div>'
+      : "";
     $("warnings").innerHTML = "";
+    $("original").removeAttribute("src");
+    $("undistorted").removeAttribute("src");
   }
   drawCoverage();
 }
