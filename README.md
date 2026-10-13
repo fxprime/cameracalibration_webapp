@@ -50,6 +50,7 @@ Sessions live in `data/<date-id>/`: source PNGs, detected metric/image points, s
 - `vision/calibration.py`: model-specific fitting, projection, validation.
 - `vision/exports.py`: explicit format adapters.
 - `vision/worker.py`: session persistence, images and tag pose.
+- `web/math.js`: explicit LaTeX rendering for equations, inline notation and live matrices; vendored KaTeX 0.19.0 and fonts work offline (MIT license in `web/vendor/katex/LICENSE`). YAML/configuration code stays literal.
 - `web/index.html`, `style.css`, `app.js`: offline teaching content and browser workflow. No frontend build tool or CDN.
 - `tests/test_geometry.py`: numerical recovery, held-out isolation, metric pose, target correspondences and export contracts.
 - `tests/make_demo.py`: rendered synthetic camera images for manual UI integration tests. **These are demo inputs, never evidence of a physical camera’s calibration.**

@@ -391,3 +391,48 @@ select:focus-visible {
     align-items: flex-start;
   }
 }
+/* Typeset math stays readable in narrow cards and does not stretch the page. */
+.equation {
+  font-family: inherit;
+  font-size: 15px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.equation .katex-display {
+  margin: 0.45em 0;
+}
+.equation .katex-display > .katex {
+  text-align: left;
+}
+p .katex,
+label .katex {
+  font-size: 1.1em;
+}
+#fov {
+  display: block;
+  overflow-x: auto;
+  padding: 12px 0;
+  font-weight: normal;
+}
+.math-results {
+  margin: 16px 0;
+}
+.card,
+article,
+.lesson-top > div {
+  min-width: 0;
+}
+#intrinsics > p {
+  overflow-x: auto;
+}
+@media (max-width: 700px) {
+  .equation {
+    padding: 14px;
+    font-size: 13px;
+  }
+}
+#distortionCanvas {
+  display: block;
+  width: 100%;
+  max-width: 500px;
+}

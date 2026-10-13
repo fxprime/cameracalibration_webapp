@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Camera Calibration Lab</title>
+    <link rel="stylesheet" href="vendor/katex/katex.min.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -41,17 +42,27 @@
               pixel becomes a direction in 3D, and a known target can provide
               metric pose.
             </p>
-            <div class="equation">
-              Before distortion: λ [u, v, 1]ᵀ = K [R | t] [X, Y, Z, 1]ᵀ
-            </div>
+            <p class="muted">Ideal projection, before lens distortion:</p>
+            <div
+              class="equation"
+              data-math-display="true"
+              data-math="\lambda\begin{bmatrix}u\\v\\1\end{bmatrix}=\mathbf K\begin{bmatrix}\mathbf R&amp;\mathbf t\end{bmatrix}\begin{bmatrix}X\\Y\\Z\\1\end{bmatrix}"
+            ></div>
             <p>
-              <b>K</b>: focal lengths fₓ, fᵧ and principal point cₓ, cᵧ.<br /><b
-                >D</b
-              >: lens distortion. <b>R, t</b>: target pose for each view.
+              <span data-math="\mathbf K"></span>: focal lengths
+              <span data-math="f_x"></span>, <span data-math="f_y"></span> and
+              principal point <span data-math="c_x"></span>,
+              <span data-math="c_y"></span>.<br /><span
+                data-math="\mathbf D"
+              ></span
+              >: lens distortion. <span data-math="\mathbf R,\mathbf t"></span>:
+              target pose for each view.
             </p>
-            <div class="equation">
-              K = ⎡ fₓ 0 cₓ ⎤<br />　　⎢ 0 fᵧ cᵧ ⎥<br />　　⎣ 0 0 1 ⎦
-            </div>
+            <div
+              class="equation"
+              data-math-display="true"
+              data-math="\mathbf K=\begin{bmatrix}f_x&amp;0&amp;c_x\\0&amp;f_y&amp;c_y\\0&amp;0&amp;1\end{bmatrix}"
+            ></div>
           </div>
           <div class="card">
             <svg
@@ -87,9 +98,13 @@
                 value="1350" /></label
             ><strong id="fov"></strong>
             <p class="muted">
-              For a centered, undistorted pinhole: HFOV = 2 atan(width / 2fₓ).
-              Real distorted FOV requires the fitted model. Sensor size and lens
-              focal length in mm are different from fₓ in pixels.
+              For a centered, undistorted pinhole:
+              <span
+                data-math="\operatorname{HFOV}=2\arctan\!\left(\frac{w}{2f_x}\right)"
+              ></span
+              >. Real distorted FOV requires the fitted model. Sensor size and
+              lens focal length in mm are different from
+              <span data-math="f_x"></span> in pixels.
             </p>
           </div>
         </div>
@@ -99,16 +114,22 @@
             <h2>Pinhole + radtan</h2>
             <p>
               A sensible starting model for this module’s moderate field of
-              view. Fit fₓ, fᵧ, cₓ, cᵧ and k₁, k₂, p₁, p₂. k₃ stays fixed to
-              avoid needless complexity.
+              view. Fit <span data-math="f_x"></span>,
+              <span data-math="f_y"></span>, <span data-math="c_x"></span>,
+              <span data-math="c_y"></span> and <span data-math="k_1"></span>,
+              <span data-math="k_2"></span>, <span data-math="p_1"></span>,
+              <span data-math="p_2"></span>. <span data-math="k_3"></span> stays
+              fixed to avoid needless complexity.
             </p>
-            <div class="equation">
-              x = X/Z, y = Y/Z, r² = x²+y²<br />x′ = x(1+k₁r²+k₂r⁴)<br />　+
-              2p₁xy + p₂(r²+2x²)<br />u = fₓx′ + cₓ
-            </div>
+            <div
+              class="equation"
+              data-math-display="true"
+              data-math="\begin{aligned}x&amp;=\frac XZ,\quad y=\frac YZ\\r^2&amp;=x^2+y^2\\x^\prime&amp;=x(1+k_1r^2+k_2r^4)\\&amp;\quad+2p_1xy+p_2(r^2+2x^2)\\u&amp;=f_xx^\prime+c_x\end{aligned}"
+            ></div>
             <p>
-              y′ uses the analogous tangential terms. Calibration minimizes
-              pixel reprojection residuals across all views.
+              <span data-math="y^\prime"></span> uses the analogous tangential
+              terms. Calibration minimizes pixel reprojection residuals across
+              all views.
             </p>
           </article>
           <article class="card">
@@ -119,9 +140,11 @@
               four angular coefficients. Choose it when the lens geometry
               warrants it; compare held-out performance.
             </p>
-            <div class="equation">
-              θ = atan(√(x²+y²))<br />θd = θ(1+k₁θ²+k₂θ⁴+k₃θ⁶+k₄θ⁸)
-            </div>
+            <div
+              class="equation"
+              data-math-display="true"
+              data-math="\begin{aligned}\theta&amp;=\arctan\!\sqrt{x^2+y^2}\\\theta_d&amp;=\theta\bigl(1+k_1\theta^2+k_2\theta^4\\&amp;\qquad+k_3\theta^6+k_4\theta^8\bigr)\end{aligned}"
+            ></div>
             <p>
               Do not choose a model from a single FOV threshold or transplant
               coefficients between models.
@@ -172,9 +195,11 @@
             extreme gain. Sharpening cannot recover accurate corners lost to
             motion blur.
           </p>
-          <div class="equation">
-            RMS = √[ (1/N) Σᵢ ((uᵢ − ûᵢ)² + (vᵢ − v̂ᵢ)²) ]
-          </div>
+          <div
+            class="equation"
+            data-math-display="true"
+            data-math="\operatorname{RMS}=\sqrt{\frac1N\sum_{i=1}^N\left[(u_i-\hat u_i)^2+(v_i-\hat v_i)^2\right]}"
+          ></div>
           <p>
             Every corner is compared with its model projection. Reserve new
             views to check whether the fitted geometry generalizes.
@@ -250,9 +275,10 @@ distortion_coeffs:
             >
             uses a pinhole intrinsic matrix alongside depth scale and camera
             poses. Correct lens distortion before a pipeline that expects
-            rectified pinhole images, and supply the corresponding new K.
-            Intrinsic calibration does not replace depth-camera alignment or
-            depth-scale calibration.
+            rectified pinhole images, and supply the corresponding
+            <span data-math="\mathbf K_{\mathrm{new}}"></span>. Intrinsic
+            calibration does not replace depth-camera alignment or depth-scale
+            calibration.
           </p>
         </div>
         <div class="card">
@@ -268,7 +294,7 @@ distortion_coeffs:
             </div>
             <div>
               <label
-                >Educational k₁
+                >Educational <span data-math="k_1"></span>
                 <input
                   id="distortionK"
                   type="range"
@@ -277,7 +303,11 @@ distortion_coeffs:
                   value="-0.15"
                   step="0.01"
               /></label>
-              <div class="equation">x′ = x(1 + k₁r²)<br />y′ = y(1 + k₁r²)</div>
+              <div
+                class="equation"
+                data-math-display="true"
+                data-math="\begin{aligned}x^\prime&amp;=x(1+k_1r^2)\\y^\prime&amp;=y(1+k_1r^2)\end{aligned}"
+              ></div>
               <p>
                 This simplified simulation changes radial distortion only. Move
                 the slider to compare barrel and pincushion shapes. Real
@@ -351,7 +381,8 @@ distortion_coeffs:
               AprilGrid: coded IDs tolerate partial visibility and remove
               checkerboard orientation ambiguity. Checkerboard: cheap, precise
               subpixel corners, but all internal corners must be visible here. A
-              9×6 internal-corner board has 10×7 squares.
+              <span data-math="9\times6"></span> internal-corner board has
+              <span data-math="10\times7"></span> squares.
             </p>
             <p>
               Keep a white border. Our AprilGrid uses IDs from zero,
@@ -438,9 +469,10 @@ distortion_coeffs:
         <div class="card">
           <h2>Every view is inspectable</h2>
           <p>
-            Keep = fit or validate. Validation views never enter the intrinsic
-            fit. Uncheck a suspect view, then refit. Do not remove difficult
-            edge views just to lower the score.
+            Kept views contribute to fitting or validation, according to their
+            checkbox. Validation views never enter the intrinsic fit. Uncheck a
+            suspect view, then refit. Do not remove difficult edge views just to
+            lower the score.
           </p>
           <div class="tablewrap">
             <table>
@@ -504,7 +536,8 @@ distortion_coeffs:
             <h2>Undistorted</h2>
             <img id="undistorted" alt="Undistorted calibration view" />
             <p id="newK">
-              Rectification changes the camera matrix. Use the displayed new K
+              Rectification changes the camera matrix. Use the displayed
+              <span data-math="\mathbf K_{\mathrm{new}}"></span>
               with this corrected image.
             </p>
           </div>
@@ -512,8 +545,10 @@ distortion_coeffs:
         <div class="card">
           <h2>Export formats</h2>
           <p>
-            ROS camera_info YAML uses K, D, R, P. OpenCV uses typed matrix
-            nodes. Kalibr uses intrinsics [fx, fy, cx, cy] with an explicit
+            ROS camera_info YAML uses
+            <span data-math="\mathbf K,\mathbf D,\mathbf R,\mathbf P"></span>.
+            OpenCV uses typed matrix nodes. Kalibr uses intrinsics
+            <span data-math="[f_x,f_y,c_x,c_y]"></span> with an explicit
             distortion model. No camera–IMU or stereo transform is fabricated.
           </p>
           <select id="format" aria-label="Export format"></select
@@ -553,18 +588,25 @@ distortion_coeffs:
         <div class="two">
           <div class="card">
             <img id="trackImage" alt="AprilTag pose axes" />
-            <p>Axes: red X, green Y, blue Z in tag coordinates.</p>
+            <p>
+              Axes: red <span data-math="X"></span>, green
+              <span data-math="Y"></span>, blue <span data-math="Z"></span> in
+              tag coordinates.
+            </p>
           </div>
           <div class="card">
             <h2>Tag position in camera coordinates</h2>
             <canvas id="poseCanvas" width="600" height="300"></canvas>
-            <pre id="poseText">
-Calibrate, connect camera, then start tracking.</pre>
+            <div id="poseText" class="math-results">
+              Calibrate, connect camera, then start tracking.
+            </div>
             <p>
-              X right · Y down · Z forward, in metres × scale. Translation is
-              the tag center. Rotation maps tag coordinates into camera
-              coordinates. Known tag size supplies metric scale; this is not
-              arbitrary-scene depth or VIO.
+              <span data-math="X"></span> right ·
+              <span data-math="Y"></span> down ·
+              <span data-math="Z"></span> forward, in metres multiplied by the
+              scale parameter. Translation is the tag center. Rotation maps tag
+              coordinates into camera coordinates. Known tag size supplies
+              metric scale; this is not arbitrary-scene depth or VIO.
             </p>
             <p>
               Two planar solutions may fit similarly. Oblique views, a larger
@@ -580,6 +622,8 @@ Calibrate, connect camera, then start tracking.</pre>
         <span id="sessionName">No session</span>
       </footer>
     </main>
+    <script src="vendor/katex/katex.min.js"></script>
+    <script src="math.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

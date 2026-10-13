@@ -142,8 +142,10 @@ $("newSession").onclick = () =>
   });
 function fov() {
   const f = +$("focal").value;
-  $("fov").textContent =
-    `fₓ = ${f} px · width 1920 px · horizontal FOV ${((2 * Math.atan(1920 / (2 * f)) * 180) / Math.PI).toFixed(1)}°`;
+  MathUI.render(
+    $("fov"),
+    String.raw`f_x=${f}\,\mathrm{px}\quad w=1920\,\mathrm{px}\quad \operatorname{HFOV}=${((2 * Math.atan(1920 / (2 * f)) * 180) / Math.PI).toFixed(1)}^\circ`,
+  );
   const x = 255 + f / 12;
   const plane = Math.min(470, x);
   $("ray")
@@ -309,28 +311,47 @@ function render() {
     $("intrinsics").replaceChildren();
     const title = document.createElement("h2");
     title.textContent = "Fitted geometry · " + r.model;
-    const pre = document.createElement("pre");
-    pre.textContent =
-      "Original image K (pixels)\n" +
-      r.K.map((row) => row.map((v) => v.toFixed(5)).join("  ")).join("\n") +
-      "\n\nDistortion " +
-      (r.model === "fisheye" ? "[k1, k2, k3, k4]" : "[k1, k2, p1, p2]") +
-      "\n" +
-      r.D.map((v) => v.toFixed(8)).join(", ") +
-      (r.diversity
-        ? "\n\nMax board tilt: " +
-          r.diversity.max_tilt_degrees.toFixed(1) +
-          "° · target distance ratio: " +
-          r.diversity.depth_ratio.toFixed(2)
-        : "") +
-      (r.uncertainty
-        ? "\nApproximate standard deviations [fx, fy, cx, cy]: " +
-          r.uncertainty
-            .slice(0, 4)
-            .map((v) => v.toFixed(4))
-            .join(", ")
-        : "");
-    $("intrinsics").append(title, pre);
+    const K = MathUI.element(
+      String.raw`\mathbf K=` + MathUI.matrix(r.K, 5),
+      true,
+    );
+    const coeffs =
+      r.model === "fisheye"
+        ? String.raw`k_1&k_2&k_3&k_4`
+        : String.raw`k_1&k_2&p_1&p_2`;
+    const D = MathUI.element(
+      String.raw`\mathbf D=\begin{bmatrix}${coeffs}\end{bmatrix}^{\!\mathsf T}= ` +
+        MathUI.matrix(
+          r.D.map((v) => [v]),
+          8,
+        ),
+      true,
+    );
+    $("intrinsics").append(title, K, D);
+    if (r.diversity) {
+      const p = document.createElement("p");
+      p.append(
+        "Maximum board tilt: ",
+        MathUI.element(
+          r.diversity.max_tilt_degrees.toFixed(1) + String.raw`^\circ`,
+        ),
+        " · target distance ratio: ",
+        MathUI.element(r.diversity.depth_ratio.toFixed(2)),
+      );
+      $("intrinsics").append(p);
+    }
+    if (r.uncertainty) {
+      const p = document.createElement("p");
+      p.append(
+        "Approximate standard deviations: ",
+        MathUI.element(
+          String.raw`[\sigma_{f_x},\sigma_{f_y},\sigma_{c_x},\sigma_{c_y}]=` +
+            MathUI.matrix([r.uncertainty.slice(0, 4)], 4) +
+            String.raw`\,\mathrm{px}`,
+        ),
+      );
+      $("intrinsics").append(p);
+    }
     const val = r.views.filter((v) => v.holdout);
     const vRms = val.length
       ? Math.sqrt(val.reduce((s, v) => s + v.rms * v.rms, 0) / val.length)
@@ -454,10 +475,14 @@ $("preview").onclick = () =>
     });
     $("original").src = d.original;
     $("undistorted").src = d.undistorted;
-    $("newK").textContent =
-      "New rectified K: " +
-      JSON.stringify(d.newK.map((row) => row.map((x) => +x.toFixed(3)))) +
-      " · Export K describes ORIGINAL frames.";
+    $("newK").replaceChildren(
+      "Rectified camera matrix:",
+      MathUI.element(
+        String.raw`\mathbf K_{\mathrm{new}}=` + MathUI.matrix(d.newK, 3),
+        true,
+      ),
+      "Exported intrinsics describe the original frames.",
+    );
     note("Preview ready. Black borders reflect rays outside the source image.");
   });
 $("export").onclick = () =>
@@ -566,8 +591,36 @@ async function trackLoop(generation) {
     if (p) {
       poseLog.push({ timestamp: d.timestamp, session: state.session, ...p });
       if (poseLog.length > 10000) poseLog.shift();
-      $("poseText").textContent =
-        `Tag ${p.id}\nX ${p.translation[0].toFixed(4)} m   Y ${p.translation[1].toFixed(4)} m\nZ ${p.translation[2].toFixed(4)} m\nReprojection RMS ${p.rms.toFixed(3)} px\n${p.ambiguous ? "⚠ Planar pose is ambiguous." : "Pose selected by positive depth and pixel error."}\nR (tag → camera)\n${p.rotation.map((row) => row.map((x) => x.toFixed(4)).join("  ")).join("\n")}`;
+      const heading = document.createElement("h3");
+      heading.textContent = `Tag ${p.id}`;
+      const translation = MathUI.element(
+        String.raw`\mathbf t_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+          MathUI.matrix(
+            p.translation.map((v) => [v]),
+            4,
+          ) +
+          String.raw`\,\mathrm m`,
+        true,
+      );
+      const rotation = MathUI.element(
+        String.raw`\mathbf R_{\mathrm{cam}\leftarrow\mathrm{tag}}=` +
+          MathUI.matrix(p.rotation, 4),
+        true,
+      );
+      const error = MathUI.element(
+        String.raw`\operatorname{RMS}=${p.rms.toFixed(3)}\,\mathrm{px}`,
+      );
+      const warning = document.createElement("p");
+      warning.textContent = p.ambiguous
+        ? "⚠ Planar pose is ambiguous."
+        : "Pose selected by positive depth and pixel error.";
+      $("poseText").replaceChildren(
+        heading,
+        translation,
+        rotation,
+        error,
+        warning,
+      );
       drawPose(p);
     } else {
       $("poseText").textContent = "Selected tag not visible. No current pose.";
@@ -657,8 +710,10 @@ function drawDistortion() {
       ctx.stroke();
     }
   }
-  $("distortionLabel").textContent =
-    `k₁ = ${k.toFixed(2)} · ${k < 0 ? "Barrel" : k > 0 ? "Pincushion" : "No radial distortion"}`;
+  $("distortionLabel").replaceChildren(
+    MathUI.element(String.raw`k_1=${k.toFixed(2)}`),
+    ` · ${k < 0 ? "Barrel" : k > 0 ? "Pincushion" : "No radial distortion"}`,
+  );
 }
 $("distortionK").oninput = drawDistortion;
 drawDistortion();
